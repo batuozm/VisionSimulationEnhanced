@@ -1,0 +1,12 @@
+fileFormatVersion: 2
+guid: 49f943cc855a04241ae4f584526dbe8a
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - defocusShader: {fileID: 4800000, guid: b8d53265b3299014c89b2adeea5dfa3f, type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
