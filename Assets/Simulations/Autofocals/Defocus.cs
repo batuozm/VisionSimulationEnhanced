@@ -139,20 +139,12 @@ public class Defocus : MonoBehaviour
 
         if (useMouse)
         {
-            if(Input.GetKey(KeyCode.Mouse0))
+            Camera cam = GetComponent<Camera>();
+            Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+
+            if (Physics.Raycast(ray, out RaycastHit hit))
             {
-                Camera cam = GetComponent<Camera>();
-                Vector2 mousePos = Input.mousePosition;
-                Vector3 point = cam.ScreenToWorldPoint(new Vector3(mousePos.x,cam.pixelHeight - mousePos.y,cam.nearClipPlane));
-                Debug.Log(point);
-
-                RaycastHit hit;
-                Ray ray = GetComponent<Camera>().ScreenPointToRay(Input.mousePosition);
-
-                if (Physics.Raycast(ray, out hit))
-                {
-                    SetFocusDistance(hit.distance + cam.nearClipPlane);
-                }
+                SetFocusDistance(hit.distance + cam.nearClipPlane);
             }
         }
     }
