@@ -19,11 +19,11 @@ public class CameraController : MonoBehaviour
 
         if (Input.GetKey(KeyCode.Q))
         {
-            rotationInput = -1f;
+            rotationInput = -10f;
         }
         else if (Input.GetKey(KeyCode.E))
         {
-            rotationInput = 1f;
+            rotationInput = 10f;
         }
 
         transform.Rotate(Vector3.up, rotationInput * rotationSpeed * Time.deltaTime);
