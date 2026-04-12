@@ -1,0 +1,4863 @@
+VisionSimulationEnhanced Repository
+
+
+.vscode > {} extensions.json
+
+{
+    "recommendations": [
+      "visualstudiotoolsforunity.vstuc"
+    ]
+}
+
+
+
+.vscode > {} launch.json
+
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach to Unity",
+            "type": "vstuc",
+            "request": "attach"
+        }
+     ]
+}
+
+
+
+.vscode > {} settings.json
+
+{
+    "files.exclude": {
+        "**/.DS_Store": true,
+        "**/.git": true,
+        "**/.vs": true,
+        "**/.gitmodules": true,
+        "**/.vsconfig": true,
+        "**/*.booproj": true,
+        "**/*.pidb": true,
+        "**/*.suo": true,
+        "**/*.user": true,
+        "**/*.userprefs": true,
+        "**/*.unityproj": true,
+        "**/*.dll": true,
+        "**/*.exe": true,
+        "**/*.pdf": true,
+        "**/*.mid": true,
+        "**/*.midi": true,
+        "**/*.wav": true,
+        "**/*.gif": true,
+        "**/*.ico": true,
+        "**/*.jpg": true,
+        "**/*.jpeg": true,
+        "**/*.png": true,
+        "**/*.psd": true,
+        "**/*.tga": true,
+        "**/*.tif": true,
+        "**/*.tiff": true,
+        "**/*.3ds": true,
+        "**/*.3DS": true,
+        "**/*.fbx": true,
+        "**/*.FBX": true,
+        "**/*.lxo": true,
+        "**/*.LXO": true,
+        "**/*.ma": true,
+        "**/*.MA": true,
+        "**/*.obj": true,
+        "**/*.OBJ": true,
+        "**/*.asset": true,
+        "**/*.cubemap": true,
+        "**/*.flare": true,
+        "**/*.mat": true,
+        "**/*.meta": true,
+        "**/*.prefab": true,
+        "**/*.unity": true,
+        "build/": true,
+        "Build/": true,
+        "Library/": true,
+        "library/": true,
+        "obj/": true,
+        "Obj/": true,
+        "Logs/": true,
+        "logs/": true,
+        "ProjectSettings/": true,
+        "UserSettings/": true,
+        "temp/": true,
+        "Temp/": true
+    },
+    "dotnet.defaultSolution": "VisionSimulationEnhanced.sln"
+}
+
+
+
+Assets > Simulations > Autofocals > Autofocals.cs
+
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class Autofocal : MonoBehaviour
+{
+    // Start is called before the first frame update
+    Defocus focusControllerLeft,focusControllerRight;
+    public enum FocusPlane
+    {
+        near,
+        mid,
+        far
+    }
+    public float[] focusPlaneList = new float[] {0.3f , 1.0f , 6.0f};
+    public float focusDistance;
+    int focusPlaneInd = 0;
+    public GameObject leftEye;
+    public GameObject rightEye;
+    
+    void Start()
+    {
+        if (leftEye== null)
+            leftEye = this.transform.Find("Left Eye").gameObject;
+        if (rightEye == null)
+            rightEye = this.transform.Find("Right Eye").gameObject;
+        
+        focusControllerLeft = leftEye.GetComponent<Defocus>();
+        focusControllerRight = rightEye.GetComponent<Defocus>();
+        if (focusControllerLeft == null)
+        {
+            // add Defocus component to camera/child cameras
+            focusControllerLeft = leftEye.AddComponent<Defocus>();
+        }
+        if (focusControllerRight == null)
+        {
+            // add Defocus component to camera/child cameras
+            focusControllerRight = rightEye.AddComponent<Defocus>();
+        }
+        focusControllerLeft.defocusShader = Shader.Find("Hidden/Defocus");
+        focusControllerRight.defocusShader = Shader.Find("Hidden/Defocus");
+    }
+
+    // manually set the focus distance in meters
+    void SetFocusDistance(float dist)
+    {
+        focusDistance = dist;
+        focusControllerLeft.SetFocusDistance(focusPlaneList[focusPlaneInd]);
+        focusControllerRight.SetFocusDistance(focusPlaneList[focusPlaneInd]);
+    }
+
+    // set focus distance to one of the defined focus planes (near, mid, far)
+    void SetFocusDistance(FocusPlane fcspln)
+    {
+        SetFocusDistance(focusPlaneList[(int)fcspln]); // use the enum fcspln as an index of the focus plane distance list
+    }
+
+    void SetFocusWithRay(Ray ray)
+    {
+        RaycastHit hit;
+        if (Physics.Raycast(ray, out hit, 100))
+           {
+               Debug.Log(hit.transform.gameObject.name);
+               SetFocusDistance(hit.distance);
+           }
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        // set focus by clicking on point
+        if (Input.GetMouseButtonDown(0))
+        {
+            Ray ray = GetComponent<Camera>().ScreenPointToRay(Input.mousePosition);
+            RaycastHit hit;
+
+            if (Physics.Raycast(ray, out hit, 100))
+            {
+                Debug.Log(hit.transform.gameObject.name);
+                // the ray originates in the near clipping plane, to get the focus distance we have to add the near clip distance
+                float focusDistance = hit.distance + GetComponent<Camera>().nearClipPlane;
+                Debug.Log(focusDistance);
+                focusControllerLeft.SetFocusDistance(focusDistance);// set lens power to focus on hit object
+                focusControllerRight.SetFocusDistance(focusDistance);// set lens power to focus on hit object
+
+            }
+        }
+        if (Input.GetKeyDown(KeyCode.UpArrow))
+        {
+            if(++focusPlaneInd >= focusPlaneList.Length)
+            {
+                focusPlaneInd = focusPlaneList.Length-1;
+            }
+            SetFocusDistance(focusPlaneList[focusPlaneInd]);
+        }
+        if (Input.GetKeyDown(KeyCode.DownArrow))
+        {
+            if(--focusPlaneInd < 0)
+            {
+                focusPlaneInd =0;
+            }
+            SetFocusDistance(focusPlaneList[focusPlaneInd]);
+        }
+    }
+}
+
+
+
+Assets > Simulations > Autofocals > Defocus.cs
+
+using System;
+using UnityEngine;
+
+public class Defocus : MonoBehaviour
+{
+    public Shader defocusShader;
+    public bool usePostPass = true;
+    public bool showDepth = false;
+    public bool showDistance = false;
+
+    [Range(0.0f, 10.0f)]
+    public float targetOpticalPower = 0.0f;
+
+    public float opticalPower = 0.0f;
+
+    [Header("Optional Refractive Error")]
+    public float opticalPowerOffsetDiopters = 0.0f;
+
+    public float powerChangePerSec = 8.0f;
+    public float pupilSize = 5.0f;
+
+    [Range(1f, 30f)]
+    public float bokehRadius = 13.0f;
+
+    [Range(1f, 30f)]
+    public float cocConstant = 2.0f;
+
+    public int downscaleFactor = 2;
+
+    [Header("Focus Input")]
+    public bool useMouse = true;
+    public bool preferExternalRay = true;
+    public float maxFocusRayDistance = 100f;
+
+    [NonSerialized]
+    Material defocusMaterial;
+
+    private Camera cam;
+
+    private bool hasExternalRayThisFrame = false;
+    private Ray externalFocusRay;
+    private float externalDistanceOffset = 0f;
+
+    const int cocPass = 0;
+    const int preFilterPass = 1;
+    const int blurPass = 2;
+    const int postFilterPass = 3;
+    const int combinePass = 4;
+    const int depthPass = 5;
+    const int distancePass = 6;
+
+    void Awake()
+    {
+        cam = GetComponent<Camera>();
+    }
+
+    void Start()
+    {
+        if (cam == null)
+        {
+            cam = GetComponent<Camera>();
+        }
+
+        if (cam != null)
+        {
+            cam.depthTextureMode = DepthTextureMode.Depth;
+            Debug.Log(cam.depthTextureMode);
+        }
+
+        opticalPower = targetOpticalPower;
+    }
+
+    void OnRenderImage(RenderTexture source, RenderTexture destination)
+    {
+        if (cam == null)
+        {
+            cam = GetComponent<Camera>();
+        }
+
+        if (defocusShader == null)
+        {
+            Graphics.Blit(source, destination);
+            return;
+        }
+
+        if (defocusMaterial == null || defocusMaterial.shader != defocusShader)
+        {
+            defocusMaterial = new Material(defocusShader);
+            defocusMaterial.hideFlags = HideFlags.HideAndDontSave;
+        }
+
+        int safeDownscaleFactor = Mathf.Max(1, downscaleFactor);
+
+        cocConstant = 0.057f * pupilSize * Mathf.Deg2Rad;
+        cocConstant = Mathf.Tan(cocConstant / 2f) / Mathf.Tan(cam.fieldOfView * Mathf.Deg2Rad / 2f) * cam.pixelHeight;
+
+        float effectiveOpticalPower = opticalPower + opticalPowerOffsetDiopters;
+
+        RenderTexture coc = RenderTexture.GetTemporary(
+            source.width,
+            source.height,
+            0,
+            RenderTextureFormat.RHalf,
+            RenderTextureReadWrite.Linear
+        );
+
+        int downscaledWidth = Mathf.Max(1, source.width / safeDownscaleFactor);
+        int downscaledHeight = Mathf.Max(1, source.height / safeDownscaleFactor);
+
+        RenderTexture tmpTex1 = RenderTexture.GetTemporary(downscaledWidth, downscaledHeight, 0, source.format);
+        RenderTexture tmpTex2 = RenderTexture.GetTemporary(downscaledWidth, downscaledHeight, 0, source.format);
+
+        defocusMaterial.SetFloat("_OpticalPower", effectiveOpticalPower);
+        defocusMaterial.SetFloat("_CocConstant", cocConstant);
+        defocusMaterial.SetFloat("_BokehRadius", bokehRadius);
+        defocusMaterial.SetInt("_downscaleFactor", safeDownscaleFactor);
+        defocusMaterial.SetTexture("_defocusTexture", coc);
+
+        if (showDepth)
+        {
+            showDistance = false;
+            Graphics.Blit(source, destination, defocusMaterial, depthPass);
+        }
+        else if (showDistance)
+        {
+            showDepth = false;
+            Graphics.Blit(source, destination, defocusMaterial, distancePass);
+        }
+        else
+        {
+            Graphics.Blit(source, coc, defocusMaterial, cocPass);
+            Graphics.Blit(source, tmpTex1, defocusMaterial, preFilterPass);
+            Graphics.Blit(tmpTex1, tmpTex2, defocusMaterial, blurPass);
+
+            RenderTexture finalBlurTex;
+            if (usePostPass)
+            {
+                Graphics.Blit(tmpTex2, tmpTex1, defocusMaterial, postFilterPass);
+                finalBlurTex = tmpTex1;
+            }
+            else
+            {
+                finalBlurTex = tmpTex2;
+            }
+
+            defocusMaterial.SetTexture("_blurredTex", finalBlurTex);
+            Graphics.Blit(source, destination, defocusMaterial, combinePass);
+        }
+
+        RenderTexture.ReleaseTemporary(coc);
+        RenderTexture.ReleaseTemporary(tmpTex1);
+        RenderTexture.ReleaseTemporary(tmpTex2);
+    }
+
+    void Update()
+    {
+        UpdateOpticalPower();
+
+        bool usedExternalRay = false;
+
+        if (preferExternalRay && hasExternalRayThisFrame)
+        {
+            usedExternalRay = TrySetFocusFromRay(externalFocusRay, externalDistanceOffset);
+        }
+
+        if (!usedExternalRay && useMouse)
+        {
+            Ray mouseRay = cam.ScreenPointToRay(Input.mousePosition);
+            TrySetFocusFromRay(mouseRay, cam.nearClipPlane);
+        }
+
+        hasExternalRayThisFrame = false;
+    }
+
+    private void UpdateOpticalPower()
+    {
+        if (targetOpticalPower > opticalPower)
+        {
+            opticalPower += powerChangePerSec * Time.deltaTime;
+            if (opticalPower > targetOpticalPower)
+            {
+                opticalPower = targetOpticalPower;
+            }
+        }
+        else if (targetOpticalPower < opticalPower)
+        {
+            opticalPower -= powerChangePerSec * Time.deltaTime;
+            if (opticalPower < targetOpticalPower)
+            {
+                opticalPower = targetOpticalPower;
+            }
+        }
+    }
+
+    private bool TrySetFocusFromRay(Ray ray, float distanceOffset)
+    {
+        if (Physics.Raycast(ray, out RaycastHit hit, maxFocusRayDistance))
+        {
+            float focusDistance = hit.distance + distanceOffset;
+            SetFocusDistance(focusDistance);
+            return true;
+        }
+
+        return false;
+    }
+
+    public void SetExternalFocusRay(Ray ray, float distanceOffset = 0f)
+    {
+        externalFocusRay = ray;
+        externalDistanceOffset = distanceOffset;
+        hasExternalRayThisFrame = true;
+    }
+
+    public void ClearExternalFocusRay()
+    {
+        hasExternalRayThisFrame = false;
+    }
+
+    public void SetFocusDistance(float focusDistance)
+    {
+        if (focusDistance <= 0.0001f)
+        {
+            return;
+        }
+
+        targetOpticalPower = 1.0f / focusDistance;
+    }
+
+    void OnDisable()
+    {
+        if (defocusMaterial != null)
+        {
+            DestroyImmediate(defocusMaterial);
+            defocusMaterial = null;
+        }
+    }
+}
+
+
+
+Assets > Simulations > Autofocals > Defocus.shader
+
+Shader "Hidden/Defocus"
+{
+	Properties
+	{
+		_MainTex ("Texture", 2D) = "black" {}
+	}
+
+	CGINCLUDE
+	#include "UnityCG.cginc"
+
+	sampler2D _MainTex, _CameraDepthTexture, _defocusTexture, _blurredTex;
+	float4 _MainTex_TexelSize; // Vector4(1 / width, 1 / height, width, height), with and height in px
+	// maybe also useful: unity_CameraWorldClipPlanes[6]
+	float _OpticalPower, _CocConstant, _BokehRadius;
+	int _downscaleFactor;
+	struct appdata
+	{
+		float4 vertex : POSITION;
+		float2 uv : TEXCOORD0;
+	};
+
+	struct v2f
+	{
+		float2 uv : TEXCOORD0;
+		float4 vertex : SV_POSITION;
+	};
+
+	v2f vert (appdata v)
+	{
+		v2f o;
+		o.vertex = UnityObjectToClipPos(v.vertex);
+		o.uv = v.uv;
+		return o;
+	}
+	ENDCG
+
+
+	SubShader
+	{
+		// No culling or depth
+		Cull Off ZWrite Off ZTest Always
+
+		Pass // 0 coc pass
+		{
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag
+			half frag (v2f i) : SV_Target
+			{   
+				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);                
+				//depth = LinearEyeDepth(depth);
+				
+				depth = Linear01Depth(depth);
+				float4 viewDir = mul (unity_CameraInvProjection, float4 (i.uv * 2.0 - 1.0, 1.0, 1.0));
+				float3 viewPos = (viewDir.xyz / viewDir.w) * depth;
+				depth = length(viewPos);
+				
+				float defocus = (_OpticalPower*depth - 1) /depth;
+				return defocus*_CocConstant;
+			}
+			ENDCG
+		}
+		Pass // 1 pre filter pass
+		// downscaling of coc texture
+		{
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag
+			half4 frag (v2f i) : SV_Target
+			{
+				// downsample defocus values
+				float4 o = _MainTex_TexelSize.xyxy * float2(-0.5, 0.5).xxyy;
+				half coc0 = tex2D(_defocusTexture, i.uv + o.xy).r;
+				half coc1 = tex2D(_defocusTexture, i.uv + o.zy).r;
+				half coc2 = tex2D(_defocusTexture, i.uv + o.xw).r;
+				half coc3 = tex2D(_defocusTexture, i.uv + o.zw).r;
+				//TODO texture gathering?
+				//half coc = (coc0 + coc1 + coc2 + coc3) * 0.25; //mean of all coc values 
+				// use max(abs(coc)) value:
+				half cocMin = min(min(min(coc0, coc1), coc2), coc3);
+				half cocMax = max(max(max(coc0, coc1), coc2), coc3);
+				half coc = cocMax >= -cocMin ? cocMax : cocMin;
+				//coc*= _CocConstant; // moved multiplication to previous pass// from defocus to coc in texels (TODO: does it work correctly?)
+				return half4(tex2D(_MainTex, i.uv).rgb, coc);
+			}
+			ENDCG
+		}
+		Pass // 2 convolution pass
+		{
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag
+			
+			#define BOKEH_KERNEL_XLARGE
+			#if defined(BOKEH_KERNEL_MEDIUM)
+				static const int kernelSampleCount = 22;
+				static const float2 kernel[kernelSampleCount] = {
+					float2(0, 0),
+					float2(0.53333336, 0),
+					float2(0.3325279, 0.4169768),
+					float2(-0.11867785, 0.5199616),
+					float2(-0.48051673, 0.2314047),
+					float2(-0.48051673, -0.23140468),
+					float2(-0.11867763, -0.51996166),
+					float2(0.33252785, -0.4169769),
+					float2(1, 0),
+					float2(0.90096885, 0.43388376),
+					float2(0.6234898, 0.7818315),
+					float2(0.22252098, 0.9749279),
+					float2(-0.22252095, 0.9749279),
+					float2(-0.62349, 0.7818314),
+					float2(-0.90096885, 0.43388382),
+					float2(-1, 0),
+					float2(-0.90096885, -0.43388376),
+					float2(-0.6234896, -0.7818316),
+					float2(-0.22252055, -0.974928),
+					float2(0.2225215, -0.9749278),
+					float2(0.6234897, -0.7818316),
+					float2(0.90096885, -0.43388376),
+				};
+			#endif
+			#if defined(BOKEH_KERNEL_LARGE)
+				static const int kernelSampleCount = 71;
+				static const float2 kernel[kernelSampleCount] = {
+					float2(0,0),
+					float2(0.2758621,0),
+					float2(0.1719972,0.21567768),
+					float2(-0.061385095,0.26894566),
+					float2(-0.24854316,0.1196921),
+					float2(-0.24854316,-0.11969208),
+					float2(-0.061384983,-0.2689457),
+					float2(0.17199717,-0.21567771),
+					float2(0.51724136,0),
+					float2(0.46601835,0.22442262),
+					float2(0.32249472,0.40439558),
+					float2(0.11509705,0.50427306),
+					float2(-0.11509704,0.50427306),
+					float2(-0.3224948,0.40439552),
+					float2(-0.46601835,0.22442265),
+					float2(-0.51724136,0),
+					float2(-0.46601835,-0.22442262),
+					float2(-0.32249463,-0.40439564),
+					float2(-0.11509683,-0.5042731),
+					float2(0.11509732,-0.504273),
+					float2(0.32249466,-0.40439564),
+					float2(0.46601835,-0.22442262),
+					float2(0.7586207,0),
+					float2(0.7249173,0.22360738),
+					float2(0.6268018,0.4273463),
+					float2(0.47299224,0.59311354),
+					float2(0.27715522,0.7061801),
+					float2(0.056691725,0.75649947),
+					float2(-0.168809,0.7396005),
+					float2(-0.3793104,0.65698475),
+					float2(-0.55610836,0.51599306),
+					float2(-0.6834936,0.32915324),
+					float2(-0.7501475,0.113066405),
+					float2(-0.7501475,-0.11306671),
+					float2(-0.6834936,-0.32915318),
+					float2(-0.5561083,-0.5159932),
+					float2(-0.37931028,-0.6569848),
+					float2(-0.16880904,-0.7396005),
+					float2(0.056691945,-0.7564994),
+					float2(0.2771556,-0.7061799),
+					float2(0.47299215,-0.59311366),
+					float2(0.62680185,-0.4273462),
+					float2(0.72491735,-0.22360711),
+					float2(1,0),
+					float2(0.9749279,0.22252093),
+					float2(0.90096885,0.43388376),
+					float2(0.7818315,0.6234898),
+					float2(0.6234898,0.7818315),
+					float2(0.43388364,0.9009689),
+					float2(0.22252098,0.9749279),
+					float2(0,1),
+					float2(-0.22252095,0.9749279),
+					float2(-0.43388385,0.90096885),
+					float2(-0.62349,0.7818314),
+					float2(-0.7818317,0.62348956),
+					float2(-0.90096885,0.43388382),
+					float2(-0.9749279,0.22252093),
+					float2(-1,0),
+					float2(-0.9749279,-0.22252087),
+					float2(-0.90096885,-0.43388376),
+					float2(-0.7818314,-0.6234899),
+					float2(-0.6234896,-0.7818316),
+					float2(-0.43388346,-0.900969),
+					float2(-0.22252055,-0.974928),
+					float2(0,-1),
+					float2(0.2225215,-0.9749278),
+					float2(0.4338835,-0.90096897),
+					float2(0.6234897,-0.7818316),
+					float2(0.78183144,-0.62348986),
+					float2(0.90096885,-0.43388376),
+					float2(0.9749279,-0.22252086),
+				};
+			#endif
+			#if defined(BOKEH_KERNEL_XLARGE)
+				static const int kernelSampleCount = 132;
+				static const float2 kernel[kernelSampleCount] = {
+					float2(0,0),
+					float2(0.16666667,0),
+					float2(0.083333333,0.14433757),
+					float2(-0.083333333,0.14433757),
+					float2(-0.16666667,0),
+					float2(-0.083333333,-0.14433757),
+					float2(0.083333333,-0.14433757),
+					float2(0.33333333,0),
+					float2(0.28867513,0.16666667),
+					float2(0.16666667,0.28867513),
+					float2(0,0.33333333),
+					float2(-0.16666667,0.28867513),
+					float2(-0.28867513,0.16666667),
+					float2(-0.33333333,0),
+					float2(-0.28867513,-0.16666667),
+					float2(-0.16666667,-0.28867513),
+					float2(0,-0.33333333),
+					float2(0.16666667,-0.28867513),
+					float2(0.28867513,-0.16666667),
+					float2(0.5,0),
+					float2(0.47290862,0.16234973),
+					float2(0.39457025,0.30710636),
+					float2(0.27347408,0.41858324),
+					float2(0.12274274,0.48470013),
+					float2(-0.041289673,0.49829225),
+					float2(-0.20084771,0.45788666),
+					float2(-0.33864079,0.36786196),
+					float2(-0.43973688,0.2379737),
+					float2(-0.49318065,0.082297295),
+					float2(-0.49318065,-0.082297295),
+					float2(-0.43973688,-0.2379737),
+					float2(-0.33864079,-0.36786196),
+					float2(-0.20084771,-0.45788666),
+					float2(-0.041289673,-0.49829225),
+					float2(0.12274274,-0.48470013),
+					float2(0.27347408,-0.41858324),
+					float2(0.39457025,-0.30710636),
+					float2(0.47290862,-0.16234973),
+					float2(0.66666667,0),
+					float2(0.64572211,0.16579326),
+					float2(0.58420445,0.32116912),
+					float2(0.48597908,0.45636474),
+					float2(0.35721786,0.56288528),
+					float2(0.20601133,0.63403768),
+					float2(0.041860346,0.66535115),
+					float2(-0.12492088,0.65485817),
+					float2(-0.28385286,0.60321803),
+					float2(-0.42494933,0.5136755),
+					float2(-0.53934466,0.39185683),
+					float2(-0.61985099,0.24541637),
+					float2(-0.6614098,0.083555489),
+					float2(-0.6614098,-0.083555489),
+					float2(-0.61985099,-0.24541637),
+					float2(-0.53934466,-0.39185683),
+					float2(-0.42494933,-0.5136755),
+					float2(-0.28385286,-0.60321803),
+					float2(-0.12492088,-0.65485817),
+					float2(0.041860346,-0.66535115),
+					float2(0.20601133,-0.63403768),
+					float2(0.35721786,-0.56288528),
+					float2(0.48597908,-0.45636474),
+					float2(0.58420445,-0.32116912),
+					float2(0.64572211,-0.16579326),
+					float2(0.83333333,0),
+					float2(0.81627495,0.16774877),
+					float2(0.76579818,0.32862988),
+					float2(0.68396953,0.47605685),
+					float2(0.5741391,0.60399399),
+					float2(0.44080334,0.70720355),
+					float2(0.28942104,0.78146011),
+					float2(0.12618981,0.8237236),
+					float2(-0.042207641,0.83226376),
+					float2(-0.20887711,0.80673093),
+					float2(-0.36699513,0.74817045),
+					float2(-0.51008832,0.65897978),
+					float2(-0.63229844,0.5428104),
+					float2(-0.72862218,0.4044183),
+					float2(-0.79511605,0.24946927),
+					float2(-0.82905777,0.084306935),
+					float2(-0.82905777,-0.084306935),
+					float2(-0.79511605,-0.24946927),
+					float2(-0.72862218,-0.4044183),
+					float2(-0.63229844,-0.5428104),
+					float2(-0.51008832,-0.65897978),
+					float2(-0.36699513,-0.74817045),
+					float2(-0.20887711,-0.80673093),
+					float2(-0.042207641,-0.83226376),
+					float2(0.12618981,-0.8237236),
+					float2(0.28942104,-0.78146011),
+					float2(0.44080334,-0.70720355),
+					float2(0.5741391,-0.60399399),
+					float2(0.68396953,-0.47605685),
+					float2(0.76579818,-0.32862988),
+					float2(0.81627495,-0.16774877),
+					float2(1,0),
+					float2(0.9863613,0.16459459),
+					float2(0.94581724,0.32469947),
+					float2(0.87947375,0.47594739),
+					float2(0.78914051,0.61421271),
+					float2(0.67728157,0.73572391),
+					float2(0.54694816,0.83716648),
+					float2(0.40169542,0.91577333),
+					float2(0.24548549,0.96940027),
+					float2(0.082579345,0.99658449),
+					float2(-0.082579345,0.99658449),
+					float2(-0.24548549,0.96940027),
+					float2(-0.40169542,0.91577333),
+					float2(-0.54694816,0.83716648),
+					float2(-0.67728157,0.73572391),
+					float2(-0.78914051,0.61421271),
+					float2(-0.87947375,0.47594739),
+					float2(-0.94581724,0.32469947),
+					float2(-0.9863613,0.16459459),
+					float2(-1,0),
+					float2(-0.9863613,-0.16459459),
+					float2(-0.94581724,-0.32469947),
+					float2(-0.87947375,-0.47594739),
+					float2(-0.78914051,-0.61421271),
+					float2(-0.67728157,-0.73572391),
+					float2(-0.54694816,-0.83716648),
+					float2(-0.40169542,-0.91577333),
+					float2(-0.24548549,-0.96940027),
+					float2(-0.082579345,-0.99658449),
+					float2(0.082579345,-0.99658449),
+					float2(0.24548549,-0.96940027),
+					float2(0.40169542,-0.91577333),
+					float2(0.54694816,-0.83716648),
+					float2(0.67728157,-0.73572391),
+					float2(0.78914051,-0.61421271),
+					float2(0.87947375,-0.47594739),
+					float2(0.94581724,-0.32469947),
+					float2(0.9863613,-0.16459459),
+				};
+			#endif
+
+			half Weigh (half coc, half radius) {
+				// test:
+				//if (coc > radius)
+				//{
+				//	return half(1.0);
+				//}
+				//else
+				//{
+				//	return half(0.0);
+				//}
+				return saturate((coc - radius + 1) / 2); // TODO what if we change the 2 here
+			}
+
+			half4 frag (v2f i) : SV_Target
+			{   
+				half3 bgColor = 0, fgColor = 0;
+				half bgWeight = 0, fgWeight = 0;
+
+				//float coc = _CocConstant * tex2D(_defocusTexture, i.uv).r;
+				//coc = clamp(coc, -1, 1); // clamp between -1 and 1
+				half coc = tex2D(_defocusTexture, i.uv).r;
+				for (int k = 0; k < kernelSampleCount; k++)
+				{
+					float2 o = kernel[k] * _BokehRadius;
+					half radius = length(o);
+					o *= _MainTex_TexelSize.xy; // from texel coords to uv coords
+					half4 s = tex2D(_MainTex, i.uv + o);
+					half coc_sample = tex2D(_defocusTexture, i.uv + o).r; // what exactly are we doing here
+					half bgw = Weigh(max(0,min(coc_sample,coc)), radius);
+					//half bgw = Weigh(coc_sample, radius);
+					//half bgw = Weigh(max(0,min(coc_sample,coc_sample)), radius);
+
+					bgColor += s.rgb * bgw;
+					bgWeight += bgw;
+
+					half fgw = Weigh(-coc_sample, radius);
+					fgColor += s.rgb * fgw;
+					fgWeight += fgw;
+
+				}
+				bgColor *= 1 / (bgWeight + (bgWeight == 0)); // devided by 1 in case Weight is 1
+				fgColor *= 1 / (fgWeight + (fgWeight == 0)); 
+				// combining fg and bg:
+				half bgfg_interp = min(1, fgWeight * 3.14159265359 /kernelSampleCount);
+				//half bgfg_interp = min(1, fgWeight /kernelSampleCount);
+				half3 color = lerp(bgColor, fgColor, bgfg_interp);
+				
+				return half4(color, bgfg_interp); // pass bgfg_interp for usage in combine pass
+			}
+			ENDCG
+		}
+		
+		Pass // 3 post filter pass
+		{
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag
+			half4 frag (v2f i) : SV_Target
+			{
+				float4 o = _MainTex_TexelSize.xyxy * float2(-0.5, 0.5).xxyy;
+				half4 s =
+				tex2D(_MainTex, i.uv + o.xy) +
+				tex2D(_MainTex, i.uv + o.zy) +
+				tex2D(_MainTex, i.uv + o.xw) +
+				tex2D(_MainTex, i.uv + o.zw);
+				return s * 0.25;
+			}
+			ENDCG
+		}
+
+		Pass // 4 combine pass
+		{
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag
+			half4 frag (v2f i) : SV_Target
+			{
+				half4 source = tex2D(_MainTex, i.uv);
+				half coc = tex2D(_defocusTexture, i.uv).r;
+				half4 blurred = tex2D(_blurredTex, i.uv);
+
+				half dofStrength = smoothstep(0.1, 1.0, abs(coc)); //TODO os smoothstep ok? with the 0.1?
+				half3 color = lerp(
+				source.rgb, blurred.rgb,
+				dofStrength + blurred.a - dofStrength * blurred.a
+				);
+				return half4(color, source.a);
+			}
+			ENDCG
+		}
+		Pass // 5 depth pass
+		{
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag
+			half4 frag (v2f i) : SV_Target
+			{   
+				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);                
+				depth = LinearEyeDepth(depth);
+				//depth = Linear01Depth(depth);
+				return 0.15*depth*half4(1,1,1,1);
+			}
+			ENDCG
+		}
+		Pass // 6 distance pass
+		{
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag
+			half4 frag (v2f i) : SV_Target
+			{   
+				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);                
+				//depth = LinearEyeDepth(depth);
+				
+				depth = Linear01Depth(depth);
+				float4 viewDir = mul (unity_CameraInvProjection, float4 (i.uv * 2.0 - 1.0, 1.0, 1.0));
+				float3 viewPos = (viewDir.xyz / viewDir.w) * depth;
+				float distance = length(viewPos);
+				
+				return 0.15*distance*half4(1,1,1,1);
+			}
+			ENDCG
+		}
+	}
+}
+
+
+
+Assets > Simulations > OffAxis > OffAxisProjection.cs
+
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class OffAxisProjection : MonoBehaviour
+{
+    // parameters for the physical screen positions
+    public Vector3 screenLowerLeft;
+    public Vector3 screenLowerRight;
+    public Vector3 screenUpperLeft;
+    
+    public Matrix4x4 originalProjection;
+    
+    Camera cam;
+
+    Vector3 vr; // right screen vector
+    Vector3 vu; // up screen vector
+    Vector3 vn; // normal screen vector
+
+    Vector3 va; // cam position to lower left screen coordinate
+    Vector3 vb; // cam position to lower right screen coordinate
+    Vector3 vc; // cam position to upper left screen coordinate
+    
+
+
+    void Start()
+    {
+        cam = GetComponent<Camera>();
+        originalProjection = cam.projectionMatrix;
+    }
+
+    void Update()
+    {
+        vr = screenLowerRight - screenLowerLeft;
+        vr = Vector3.Normalize(vr);
+
+        vu = screenUpperLeft - screenLowerLeft;
+        vu = Vector3.Normalize(vu);
+
+        vn = Vector3.Cross(vr,vu);
+        vn = Vector3.Normalize(vn);
+
+        va = screenLowerLeft - this.transform.position;
+        vb = screenLowerRight - this.transform.position;
+        vc = screenUpperLeft - this.transform.position;
+    }
+
+    void LateUpdate() // use LateUpdate for setting the projection, to make sure all tracking updates are done
+    {
+        float d = 1.0f * Vector3.Dot(vn,va);
+        float near = cam.nearClipPlane;
+        float far = cam.farClipPlane;
+
+        float left = Vector3.Dot(vr,va) * near / d;
+        float right = Vector3.Dot(vr,vb) * near / d;
+        float bottom = Vector3.Dot(vu,va) * near / d;
+        float top = Vector3.Dot(vu,vc) * near / d;
+
+
+        Matrix4x4 M = Matrix4x4.zero;
+        M[0, 0] = vr.x;
+        M[0, 1] = vr.y;
+        M[0, 2] = vr.z;
+
+        M[1, 0] = vu.x;
+        M[1, 1] = vu.y;
+        M[1, 2] = vu.z;
+
+        M[2, 0] = vn.x;
+        M[2, 1] = vn.y;
+        M[2, 2] = vn.z;
+
+        M[3, 3] = 1.0f;
+
+
+        Matrix4x4 P = PerspectiveOffCenter(left, right, bottom, top, near, far);
+        
+        //Translation to eye position
+        Matrix4x4 T = Matrix4x4.Translate(-transform.position);
+
+        Matrix4x4 R = Matrix4x4.Rotate(Quaternion.Inverse(transform.rotation)); // * ProjectionScreen.transform.rotation);
+        cam.ResetWorldToCameraMatrix();                
+        
+        cam.worldToCameraMatrix =  Matrix4x4.Rotate(Quaternion.Inverse(transform.rotation)) * cam.worldToCameraMatrix;//R * T;
+        
+        cam.projectionMatrix = P*M.inverse;
+    }
+
+
+    void OnDrawGizmos()
+    {
+        Gizmos.color = Color.red;
+        Gizmos.DrawLine(screenLowerLeft, screenLowerRight);
+        Gizmos.DrawLine(screenLowerLeft, screenUpperLeft);
+        Gizmos.DrawLine(screenUpperLeft + screenLowerRight - screenLowerLeft, screenLowerRight);
+        Gizmos.DrawLine(screenUpperLeft, screenUpperLeft + screenLowerRight - screenLowerLeft);
+    }
+
+    // general off axis projection matrix
+    Matrix4x4 PerspectiveOffCenter(float left, float right, float bottom, float top, float near, float far)
+    {
+        float x = 2.0F * near / (right - left);
+        float y = 2.0F * near / (top - bottom);
+        float a = (right + left) / (right - left);
+        float b = (top + bottom) / (top - bottom);
+        float c = -(far + near) / (far - near);
+        float d = -(2.0F * far * near) / (far - near);
+        float e = -1.0F;
+        Matrix4x4 m = new Matrix4x4();
+        m[0, 0] = x;
+        m[0, 1] = 0;
+        m[0, 2] = a;
+        m[0, 3] = 0;
+        m[1, 0] = 0;
+        m[1, 1] = y;
+        m[1, 2] = b;
+        m[1, 3] = 0;
+        m[2, 0] = 0;
+        m[2, 1] = 0;
+        m[2, 2] = c;
+        m[2, 3] = d;
+        m[3, 0] = 0;
+        m[3, 1] = 0;
+        m[3, 2] = e;
+        m[3, 3] = 0;
+        return m;
+    }
+}
+
+
+
+Assets > PlayerMovement.cs
+
+using UnityEngine;
+
+public class CameraController : MonoBehaviour
+{
+    public float moveSpeed = 5f;
+    public float rotationSpeed = 50f;
+
+    void Update()
+    {
+        // Camera movement
+        float horizontal = Input.GetAxis("Horizontal");
+        float vertical = Input.GetAxis("Vertical");
+
+        Vector3 moveDirection = new Vector3(horizontal, 0f, vertical).normalized;
+        transform.Translate(moveDirection * moveSpeed * Time.deltaTime);
+
+        // Camera rotation
+        float rotationInput = 0f;
+
+        if (Input.GetKey(KeyCode.Q))
+        {
+            rotationInput = -50f;
+        }
+        else if (Input.GetKey(KeyCode.E))
+        {
+            rotationInput = 50f;
+        }
+
+        transform.Rotate(Vector3.up, rotationInput * rotationSpeed * Time.deltaTime);
+    }
+}
+
+
+
+Packages > manifest.json
+
+{
+  "dependencies": {
+    "com.unity.collab-proxy": "2.2.0",
+    "com.unity.feature.development": "1.0.1",
+    "com.unity.textmeshpro": "3.0.6",
+    "com.unity.timeline": "1.7.6",
+    "com.unity.ugui": "1.0.0",
+    "com.unity.visualscripting": "1.9.1",
+    "com.unity.xr.interaction.toolkit": "2.5.4",
+    "com.unity.xr.management": "4.5.4",
+    "com.unity.xr.openxr": "1.9.1",
+    "com.unity.modules.ai": "1.0.0",
+    "com.unity.modules.androidjni": "1.0.0",
+    "com.unity.modules.animation": "1.0.0",
+    "com.unity.modules.assetbundle": "1.0.0",
+    "com.unity.modules.audio": "1.0.0",
+    "com.unity.modules.cloth": "1.0.0",
+    "com.unity.modules.director": "1.0.0",
+    "com.unity.modules.imageconversion": "1.0.0",
+    "com.unity.modules.imgui": "1.0.0",
+    "com.unity.modules.jsonserialize": "1.0.0",
+    "com.unity.modules.particlesystem": "1.0.0",
+    "com.unity.modules.physics": "1.0.0",
+    "com.unity.modules.physics2d": "1.0.0",
+    "com.unity.modules.screencapture": "1.0.0",
+    "com.unity.modules.terrain": "1.0.0",
+    "com.unity.modules.terrainphysics": "1.0.0",
+    "com.unity.modules.tilemap": "1.0.0",
+    "com.unity.modules.ui": "1.0.0",
+    "com.unity.modules.uielements": "1.0.0",
+    "com.unity.modules.umbra": "1.0.0",
+    "com.unity.modules.unityanalytics": "1.0.0",
+    "com.unity.modules.unitywebrequest": "1.0.0",
+    "com.unity.modules.unitywebrequestassetbundle": "1.0.0",
+    "com.unity.modules.unitywebrequestaudio": "1.0.0",
+    "com.unity.modules.unitywebrequesttexture": "1.0.0",
+    "com.unity.modules.unitywebrequestwww": "1.0.0",
+    "com.unity.modules.vehicles": "1.0.0",
+    "com.unity.modules.video": "1.0.0",
+    "com.unity.modules.vr": "1.0.0",
+    "com.unity.modules.wind": "1.0.0",
+    "com.unity.modules.xr": "1.0.0"
+  }
+}
+
+
+
+
+Packages > packages-lock.json
+
+{
+  "dependencies": {
+    "com.unity.collab-proxy": {
+      "version": "2.2.0",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.editorcoroutines": {
+      "version": "1.0.0",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.ext.nunit": {
+      "version": "1.0.6",
+      "depth": 2,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.feature.development": {
+      "version": "1.0.1",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.ide.visualstudio": "2.0.22",
+        "com.unity.ide.rider": "3.0.27",
+        "com.unity.ide.vscode": "1.2.5",
+        "com.unity.editorcoroutines": "1.0.0",
+        "com.unity.performance.profile-analyzer": "1.2.2",
+        "com.unity.test-framework": "1.1.33",
+        "com.unity.testtools.codecoverage": "1.2.5"
+      }
+    },
+    "com.unity.ide.rider": {
+      "version": "3.0.27",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.ext.nunit": "1.0.6"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.ide.visualstudio": {
+      "version": "2.0.22",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.test-framework": "1.1.9"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.ide.vscode": {
+      "version": "1.2.5",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.inputsystem": {
+      "version": "1.7.0",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.modules.uielements": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.mathematics": {
+      "version": "1.2.6",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.performance.profile-analyzer": {
+      "version": "1.2.2",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.settings-manager": {
+      "version": "2.0.1",
+      "depth": 2,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.test-framework": {
+      "version": "1.1.33",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.ext.nunit": "1.0.6",
+        "com.unity.modules.imgui": "1.0.0",
+        "com.unity.modules.jsonserialize": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.testtools.codecoverage": {
+      "version": "1.2.5",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.test-framework": "1.0.16",
+        "com.unity.settings-manager": "1.0.1"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.textmeshpro": {
+      "version": "3.0.6",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.ugui": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.timeline": {
+      "version": "1.7.6",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.modules.audio": "1.0.0",
+        "com.unity.modules.director": "1.0.0",
+        "com.unity.modules.animation": "1.0.0",
+        "com.unity.modules.particlesystem": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.ugui": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.ui": "1.0.0",
+        "com.unity.modules.imgui": "1.0.0"
+      }
+    },
+    "com.unity.visualscripting": {
+      "version": "1.9.1",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.ugui": "1.0.0",
+        "com.unity.modules.jsonserialize": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.xr.core-utils": {
+      "version": "2.3.0",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.modules.xr": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.xr.interaction.toolkit": {
+      "version": "2.5.4",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.ugui": "1.0.0",
+        "com.unity.inputsystem": "1.7.0",
+        "com.unity.mathematics": "1.2.6",
+        "com.unity.modules.audio": "1.0.0",
+        "com.unity.modules.imgui": "1.0.0",
+        "com.unity.xr.core-utils": "2.2.3",
+        "com.unity.modules.physics": "1.0.0",
+        "com.unity.xr.legacyinputhelpers": "2.1.10"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.xr.legacyinputhelpers": {
+      "version": "2.1.11",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.modules.vr": "1.0.0",
+        "com.unity.modules.xr": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.xr.management": {
+      "version": "4.5.4",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.modules.xr": "1.0.0",
+        "com.unity.xr.core-utils": "2.2.1",
+        "com.unity.modules.subsystems": "1.0.0",
+        "com.unity.xr.legacyinputhelpers": "2.1.11"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.xr.openxr": {
+      "version": "1.9.1",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.inputsystem": "1.6.3",
+        "com.unity.xr.core-utils": "2.1.1",
+        "com.unity.xr.management": "4.4.0",
+        "com.unity.xr.legacyinputhelpers": "2.1.2"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.modules.ai": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.androidjni": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.animation": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.assetbundle": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.audio": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.cloth": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.physics": "1.0.0"
+      }
+    },
+    "com.unity.modules.director": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.audio": "1.0.0",
+        "com.unity.modules.animation": "1.0.0"
+      }
+    },
+    "com.unity.modules.imageconversion": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.imgui": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.jsonserialize": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.particlesystem": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.physics": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.physics2d": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.screencapture": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.imageconversion": "1.0.0"
+      }
+    },
+    "com.unity.modules.subsystems": {
+      "version": "1.0.0",
+      "depth": 1,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.jsonserialize": "1.0.0"
+      }
+    },
+    "com.unity.modules.terrain": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.terrainphysics": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.physics": "1.0.0",
+        "com.unity.modules.terrain": "1.0.0"
+      }
+    },
+    "com.unity.modules.tilemap": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.physics2d": "1.0.0"
+      }
+    },
+    "com.unity.modules.ui": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.uielements": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.ui": "1.0.0",
+        "com.unity.modules.imgui": "1.0.0",
+        "com.unity.modules.jsonserialize": "1.0.0"
+      }
+    },
+    "com.unity.modules.umbra": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.unityanalytics": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.unitywebrequest": "1.0.0",
+        "com.unity.modules.jsonserialize": "1.0.0"
+      }
+    },
+    "com.unity.modules.unitywebrequest": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.unitywebrequestassetbundle": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.assetbundle": "1.0.0",
+        "com.unity.modules.unitywebrequest": "1.0.0"
+      }
+    },
+    "com.unity.modules.unitywebrequestaudio": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.unitywebrequest": "1.0.0",
+        "com.unity.modules.audio": "1.0.0"
+      }
+    },
+    "com.unity.modules.unitywebrequesttexture": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.unitywebrequest": "1.0.0",
+        "com.unity.modules.imageconversion": "1.0.0"
+      }
+    },
+    "com.unity.modules.unitywebrequestwww": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.unitywebrequest": "1.0.0",
+        "com.unity.modules.unitywebrequestassetbundle": "1.0.0",
+        "com.unity.modules.unitywebrequestaudio": "1.0.0",
+        "com.unity.modules.audio": "1.0.0",
+        "com.unity.modules.assetbundle": "1.0.0",
+        "com.unity.modules.imageconversion": "1.0.0"
+      }
+    },
+    "com.unity.modules.vehicles": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.physics": "1.0.0"
+      }
+    },
+    "com.unity.modules.video": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.audio": "1.0.0",
+        "com.unity.modules.ui": "1.0.0",
+        "com.unity.modules.unitywebrequest": "1.0.0"
+      }
+    },
+    "com.unity.modules.vr": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.jsonserialize": "1.0.0",
+        "com.unity.modules.physics": "1.0.0",
+        "com.unity.modules.xr": "1.0.0"
+      }
+    },
+    "com.unity.modules.wind": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.xr": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.physics": "1.0.0",
+        "com.unity.modules.jsonserialize": "1.0.0",
+        "com.unity.modules.subsystems": "1.0.0"
+      }
+    }
+  }
+}
+
+
+
+
+.gitignore
+
+# This .gitignore file should be placed at the root of your Unity project directory
+#
+# Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore
+#
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+
+# MemoryCaptures can get excessive in size.
+# They also could contain extremely sensitive data
+/[Mm]emoryCaptures/
+
+# Recordings can get excessive in size
+/[Rr]ecordings/
+
+# Uncomment this line if you wish to ignore the asset store tools plugin
+# /[Aa]ssets/AssetStoreTools*
+
+# Autogenerated Jetbrains Rider plugin
+/[Aa]ssets/Plugins/Editor/JetBrains*
+
+# Visual Studio cache directory
+.vs/
+.vscode/
+
+# Gradle cache directory
+.gradle/
+
+# Autogenerated VS/MD/Consulo solution and project files
+ExportedObj/
+.consulo/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Unity3D generated meta files
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# Unity3D generated file on crash reports
+sysinfo.txt
+
+# Builds
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# Crashlytics generated file
+crashlytics-build.properties
+
+# Packed Addressables
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
+
+# Temporary auto-generated Android Assets
+/[Aa]ssets/[Ss]treamingAssets/aa.meta
+/[Aa]ssets/[Ss]treamingAssets/aa/*
+
+
+
+Assembly-CSharp.csproj
+
+<Project ToolsVersion="Current">
+  <!-- Generated file, do not modify, your changes will be overwritten (use AssetPostprocessor.OnGeneratedCSProject) -->
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>Temp/obj/$(Configuration)/$(MSBuildProjectName)</BaseIntermediateOutputPath>
+    <IntermediateOutputPath>$(BaseIntermediateOutputPath)</IntermediateOutputPath>
+  </PropertyGroup>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <ItemGroup>
+    <ProjectCapability Include="Unity" />
+  </ItemGroup>
+  <PropertyGroup>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <LangVersion>9.0</LangVersion>
+    <Configurations>Debug;Release</Configurations>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <RootNamespace></RootNamespace>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <AssemblyName>Assembly-CSharp</AssemblyName>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <BaseDirectory>.</BaseDirectory>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>Temp/bin/Debug/</OutputPath>
+    <DefineConstants>UNITY_2022_3_19;UNITY_2022_3;UNITY_2022;UNITY_5_3_OR_NEWER;UNITY_5_4_OR_NEWER;UNITY_5_5_OR_NEWER;UNITY_5_6_OR_NEWER;UNITY_2017_1_OR_NEWER;UNITY_2017_2_OR_NEWER;UNITY_2017_3_OR_NEWER;UNITY_2017_4_OR_NEWER;UNITY_2018_1_OR_NEWER;UNITY_2018_2_OR_NEWER;UNITY_2018_3_OR_NEWER;UNITY_2018_4_OR_NEWER;UNITY_2019_1_OR_NEWER;UNITY_2019_2_OR_NEWER;UNITY_2019_3_OR_NEWER;UNITY_2019_4_OR_NEWER;UNITY_2020_1_OR_NEWER;UNITY_2020_2_OR_NEWER;UNITY_2020_3_OR_NEWER;UNITY_2021_1_OR_NEWER;UNITY_2021_2_OR_NEWER;UNITY_2021_3_OR_NEWER;UNITY_2022_1_OR_NEWER;UNITY_2022_2_OR_NEWER;UNITY_2022_3_OR_NEWER;PLATFORM_ARCH_64;UNITY_64;UNITY_INCLUDE_TESTS;ENABLE_AR;ENABLE_AUDIO;ENABLE_CACHING;ENABLE_CLOTH;ENABLE_MICROPHONE;ENABLE_MULTIPLE_DISPLAYS;ENABLE_PHYSICS;ENABLE_TEXTURE_STREAMING;ENABLE_VIRTUALTEXTURING;ENABLE_LZMA;ENABLE_UNITYEVENTS;ENABLE_VR;ENABLE_WEBCAM;ENABLE_UNITYWEBREQUEST;ENABLE_WWW;ENABLE_CLOUD_SERVICES;ENABLE_CLOUD_SERVICES_ADS;ENABLE_CLOUD_SERVICES_USE_WEBREQUEST;ENABLE_CLOUD_SERVICES_CRASH_REPORTING;ENABLE_CLOUD_SERVICES_NATIVE_CRASH_REPORTING;ENABLE_CLOUD_SERVICES_PURCHASING;ENABLE_CLOUD_SERVICES_ANALYTICS;ENABLE_CLOUD_SERVICES_BUILD;ENABLE_EDITOR_GAME_SERVICES;ENABLE_UNITY_GAME_SERVICES_ANALYTICS_SUPPORT;ENABLE_CLOUD_LICENSE;ENABLE_EDITOR_HUB_LICENSE;ENABLE_WEBSOCKET_CLIENT;ENABLE_GENERATE_NATIVE_PLUGINS_FOR_ASSEMBLIES_API;ENABLE_DIRECTOR_AUDIO;ENABLE_DIRECTOR_TEXTURE;ENABLE_MANAGED_JOBS;ENABLE_MANAGED_TRANSFORM_JOBS;ENABLE_MANAGED_ANIMATION_JOBS;ENABLE_MANAGED_AUDIO_JOBS;ENABLE_MANAGED_UNITYTLS;INCLUDE_DYNAMIC_GI;ENABLE_SCRIPTING_GC_WBARRIERS;PLATFORM_SUPPORTS_MONO;RENDER_SOFTWARE_CURSOR;ENABLE_VIDEO;ENABLE_ACCELERATOR_CLIENT_DEBUGGING;ENABLE_NAVIGATION_PACKAGE_DEBUG_VISUALIZATION;ENABLE_NAVIGATION_HEIGHTMESH_RUNTIME_SUPPORT;ENABLE_NAVIGATION_UI_REQUIRES_PACKAGE;PLATFORM_STANDALONE;TEXTCORE_1_0_OR_NEWER;PLATFORM_STANDALONE_OSX;UNITY_STANDALONE_OSX;UNITY_STANDALONE;ENABLE_GAMECENTER;ENABLE_RUNTIME_GI;ENABLE_MOVIES;ENABLE_NETWORK;ENABLE_CRUNCH_TEXTURE_COMPRESSION;ENABLE_CLUSTER_SYNC;ENABLE_CLUSTERINPUT;ENABLE_SPATIALTRACKING;PLATFORM_UPDATES_TIME_OUTSIDE_OF_PLAYER_LOOP;ENABLE_MONO;NET_STANDARD_2_0;NET_STANDARD;NET_STANDARD_2_1;NETSTANDARD;NETSTANDARD2_1;ENABLE_PROFILER;DEBUG;TRACE;UNITY_ASSERTIONS;UNITY_EDITOR;UNITY_EDITOR_64;UNITY_EDITOR_OSX;ENABLE_UNITY_COLLECTIONS_CHECKS;ENABLE_BURST_AOT;UNITY_TEAM_LICENSE;ENABLE_CUSTOM_RENDER_TEXTURE;ENABLE_DIRECTOR;ENABLE_LOCALIZATION;ENABLE_SPRITES;ENABLE_TERRAIN;ENABLE_TILEMAP;ENABLE_TIMELINE;ENABLE_LEGACY_INPUT_MANAGER;TEXTCORE_FONT_ENGINE_1_5_OR_NEWER;CSHARP_7_OR_LATER;CSHARP_7_3_OR_NEWER</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <NoWarn>0169;USG0001</NoWarn>
+    <AllowUnsafeBlocks>False</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>Temp/bin/Release/</OutputPath>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <NoWarn>0169;USG0001</NoWarn>
+    <AllowUnsafeBlocks>False</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <PropertyGroup>
+    <NoStandardLibraries>true</NoStandardLibraries>
+    <NoStdLib>true</NoStdLib>
+    <NoConfig>true</NoConfig>
+    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+    <MSBuildWarningsAsMessages>MSB3277</MSBuildWarningsAsMessages>
+  </PropertyGroup>
+  <PropertyGroup>
+    <UnityProjectGenerator>Package</UnityProjectGenerator>
+    <UnityProjectGeneratorVersion>2.0.22</UnityProjectGeneratorVersion>
+    <UnityProjectGeneratorStyle>SDK</UnityProjectGeneratorStyle>
+    <UnityProjectType>Game:1</UnityProjectType>
+    <UnityBuildTarget>StandaloneOSX:2</UnityBuildTarget>
+    <UnityVersion>2022.3.19f1</UnityVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Analyzer Include="/Users/batu.ozm/.vscode/extensions/visualstudiotoolsforunity.vstuc-1.2.1/Analyzers/Microsoft.Unity.Analyzers.dll" />
+    <Analyzer Include="/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Tools/Unity.SourceGenerators/Unity.SourceGenerators.dll" />
+    <Analyzer Include="/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Tools/Unity.SourceGenerators/Unity.Properties.SourceGenerator.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Assets/PlayerMovement.cs" />
+    <Compile Include="Assets/Simulations/Autofocals/Defocus.cs" />
+    <Compile Include="Assets/Simulations/OffAxis/OffAxisProjection.cs" />
+    <Compile Include="Assets/Simulations/Autofocals/Autofocal.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets/Simulations/Autofocals/Defocus.shader" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="UnityEngine">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AIModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.AIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ARModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.ARModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AccessibilityModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.AccessibilityModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AndroidJNIModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.AndroidJNIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AnimationModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.AnimationModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AssetBundleModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.AssetBundleModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AudioModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.AudioModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ClothModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.ClothModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ClusterInputModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.ClusterInputModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ClusterRendererModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.ClusterRendererModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ContentLoadModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.ContentLoadModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.CoreModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CrashReportingModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.CrashReportingModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.DSPGraphModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.DSPGraphModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.DirectorModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.DirectorModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.GIModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.GIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.GameCenterModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.GameCenterModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.GridModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.GridModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.HotReloadModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.HotReloadModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.ImageConversionModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.InputModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.InputModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.JSONSerializeModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.JSONSerializeModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.LocalizationModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.LocalizationModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ParticleSystemModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.ParticleSystemModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.PerformanceReportingModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.PerformanceReportingModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.Physics2DModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.Physics2DModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ProfilerModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.ProfilerModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.PropertiesModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.PropertiesModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.RuntimeInitializeOnLoadManagerInitializerModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.RuntimeInitializeOnLoadManagerInitializerModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ScreenCaptureModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.ScreenCaptureModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.SharedInternalsModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.SharedInternalsModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.SpriteMaskModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.SpriteMaskModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.SpriteShapeModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.SpriteShapeModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.StreamingModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.StreamingModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.SubstanceModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.SubstanceModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.SubsystemsModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.SubsystemsModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TLSModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.TLSModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TerrainModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.TerrainModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TerrainPhysicsModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.TerrainPhysicsModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextCoreFontEngineModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.TextCoreFontEngineModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextCoreTextEngineModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.TextCoreTextEngineModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TilemapModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.TilemapModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.UIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIElementsModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.UIElementsModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UmbraModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.UmbraModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UnityAnalyticsModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.UnityAnalyticsModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UnityAnalyticsCommonModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.UnityAnalyticsCommonModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UnityConnectModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.UnityConnectModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UnityCurlModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.UnityCurlModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UnityTestProtocolModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.UnityTestProtocolModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UnityWebRequestModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.UnityWebRequestModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UnityWebRequestAssetBundleModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.UnityWebRequestAssetBundleModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UnityWebRequestAudioModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.UnityWebRequestAudioModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UnityWebRequestTextureModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.UnityWebRequestTextureModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UnityWebRequestWWWModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.UnityWebRequestWWWModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.VFXModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.VFXModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.VRModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.VRModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.VehiclesModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.VehiclesModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.VideoModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.VideoModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.VirtualTexturingModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.VirtualTexturingModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.WindModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.WindModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.XRModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.XRModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEditor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor.CoreModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEditor.CoreModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor.DeviceSimulatorModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEditor.DeviceSimulatorModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor.DiagnosticsModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEditor.DiagnosticsModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor.EditorToolbarModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEditor.EditorToolbarModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor.GraphViewModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEditor.GraphViewModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor.PresetsUIModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEditor.PresetsUIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor.QuickSearchModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEditor.QuickSearchModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor.SceneTemplateModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEditor.SceneTemplateModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor.SceneViewModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEditor.SceneViewModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor.TextCoreFontEngineModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEditor.TextCoreFontEngineModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor.TextCoreTextEngineModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEditor.TextCoreTextEngineModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor.UIBuilderModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEditor.UIBuilderModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor.UIElementsModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEditor.UIElementsModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor.UIElementsSamplesModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEditor.UIElementsSamplesModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor.UnityConnectModule">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/Managed/UnityEngine/UnityEditor.UnityConnectModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="ReportGeneratorMerged">
+      <HintPath>Library/PackageCache/com.unity.testtools.codecoverage@1.2.5/lib/ReportGenerator/ReportGeneratorMerged.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.VisualScripting.Antlr3.Runtime">
+      <HintPath>Library/PackageCache/com.unity.visualscripting@1.9.1/Runtime/VisualScripting.Flow/Dependencies/NCalc/Unity.VisualScripting.Antlr3.Runtime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.Android.Types">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/PlaybackEngines/AndroidPlayer/Unity.Android.Types.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.Android.Gradle">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/PlaybackEngines/AndroidPlayer/Unity.Android.Gradle.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.Android.GradleProject">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/PlaybackEngines/AndroidPlayer/Unity.Android.GradleProject.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="netstandard">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/ref/2.1.0/netstandard.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Win32.Primitives">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/Microsoft.Win32.Primitives.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.AppContext">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.AppContext.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Buffers">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Buffers.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Collections.Concurrent">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Collections.Concurrent.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Collections.NonGeneric">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Collections.NonGeneric.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Collections.Specialized">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Collections.Specialized.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Collections">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Collections.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.ComponentModel.EventBasedAsync">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.ComponentModel.EventBasedAsync.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.ComponentModel.Primitives">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.ComponentModel.Primitives.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.ComponentModel.TypeConverter">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.ComponentModel.TypeConverter.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.ComponentModel">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.ComponentModel.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Console">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Console.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Data.Common">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Data.Common.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Diagnostics.Contracts">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Diagnostics.Contracts.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Diagnostics.Debug">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Diagnostics.Debug.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Diagnostics.FileVersionInfo">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Diagnostics.FileVersionInfo.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Diagnostics.Process">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Diagnostics.Process.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Diagnostics.StackTrace">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Diagnostics.StackTrace.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Diagnostics.TextWriterTraceListener">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Diagnostics.TextWriterTraceListener.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Diagnostics.Tools">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Diagnostics.Tools.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Diagnostics.TraceSource">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Diagnostics.TraceSource.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Diagnostics.Tracing">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Diagnostics.Tracing.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Drawing.Primitives">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Drawing.Primitives.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Dynamic.Runtime">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Dynamic.Runtime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Globalization.Calendars">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Globalization.Calendars.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Globalization.Extensions">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Globalization.Extensions.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Globalization">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Globalization.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.IO.Compression.ZipFile">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.IO.Compression.ZipFile.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.IO.Compression">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.IO.Compression.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.IO.FileSystem.DriveInfo">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.IO.FileSystem.DriveInfo.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.IO.FileSystem.Primitives">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.IO.FileSystem.Primitives.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.IO.FileSystem.Watcher">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.IO.FileSystem.Watcher.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.IO.FileSystem">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.IO.FileSystem.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.IO.IsolatedStorage">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.IO.IsolatedStorage.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.IO.MemoryMappedFiles">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.IO.MemoryMappedFiles.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.IO.Pipes">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.IO.Pipes.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.IO.UnmanagedMemoryStream">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.IO.UnmanagedMemoryStream.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.IO">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.IO.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Linq.Expressions">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Linq.Expressions.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Linq.Parallel">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Linq.Parallel.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Linq.Queryable">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Linq.Queryable.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Linq">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Linq.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Memory">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Memory.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Net.Http">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Net.Http.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Net.NameResolution">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Net.NameResolution.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Net.NetworkInformation">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Net.NetworkInformation.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Net.Ping">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Net.Ping.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Net.Primitives">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Net.Primitives.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Net.Requests">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Net.Requests.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Net.Security">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Net.Security.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Net.Sockets">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Net.Sockets.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Net.WebHeaderCollection">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Net.WebHeaderCollection.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Net.WebSockets.Client">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Net.WebSockets.Client.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Net.WebSockets">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Net.WebSockets.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Numerics.Vectors">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Numerics.Vectors.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.ObjectModel">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.ObjectModel.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Reflection.DispatchProxy">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Reflection.DispatchProxy.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Reflection.Emit.ILGeneration">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Reflection.Emit.ILGeneration.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Reflection.Emit.Lightweight">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Reflection.Emit.Lightweight.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Reflection.Emit">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Reflection.Emit.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Reflection.Extensions">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Reflection.Extensions.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Reflection.Primitives">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Reflection.Primitives.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Reflection">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Reflection.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Resources.Reader">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Resources.Reader.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Resources.ResourceManager">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Resources.ResourceManager.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Resources.Writer">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Resources.Writer.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.VisualC">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Runtime.CompilerServices.VisualC.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Runtime.Extensions">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Runtime.Extensions.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Runtime.Handles">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Runtime.Handles.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Runtime.InteropServices.RuntimeInformation">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Runtime.InteropServices.RuntimeInformation.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Runtime.InteropServices">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Runtime.InteropServices.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Runtime.Numerics">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Runtime.Numerics.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Runtime.Serialization.Formatters">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Runtime.Serialization.Formatters.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Runtime.Serialization.Json">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Runtime.Serialization.Json.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Runtime.Serialization.Primitives">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Runtime.Serialization.Primitives.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Runtime.Serialization.Xml">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Runtime.Serialization.Xml.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Runtime">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Runtime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Security.Claims">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Security.Claims.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Security.Cryptography.Algorithms">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Security.Cryptography.Algorithms.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Security.Cryptography.Csp">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Security.Cryptography.Csp.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Security.Cryptography.Encoding">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Security.Cryptography.Encoding.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Security.Cryptography.Primitives">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Security.Cryptography.Primitives.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Security.Cryptography.X509Certificates">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Security.Cryptography.X509Certificates.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Security.Principal">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Security.Principal.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Security.SecureString">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Security.SecureString.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Text.Encoding.Extensions">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Text.Encoding.Extensions.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Text.Encoding">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Text.Encoding.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Text.RegularExpressions">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Text.RegularExpressions.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Threading.Overlapped">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Threading.Overlapped.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Threading.Tasks.Extensions">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Threading.Tasks.Extensions.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Threading.Tasks.Parallel">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Threading.Tasks.Parallel.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Threading.Tasks">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Threading.Tasks.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Threading.Thread">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Threading.Thread.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Threading.ThreadPool">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Threading.ThreadPool.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Threading.Timer">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Threading.Timer.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Threading">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Threading.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.ValueTuple">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.ValueTuple.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Xml.ReaderWriter">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Xml.ReaderWriter.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Xml.XDocument">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Xml.XDocument.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Xml.XPath.XDocument">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Xml.XPath.XDocument.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Xml.XPath">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Xml.XPath.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Xml.XmlDocument">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Xml.XmlDocument.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Xml.XmlSerializer">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netstandard/System.Xml.XmlSerializer.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Runtime.InteropServices.WindowsRuntime">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/Extensions/2.0.0/System.Runtime.InteropServices.WindowsRuntime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.ComponentModel.Composition">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/System.ComponentModel.Composition.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Core">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/System.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Data">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/System.Data.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Drawing">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/System.Drawing.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.IO.Compression.FileSystem">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/System.IO.Compression.FileSystem.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Net">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/System.Net.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Numerics">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/System.Numerics.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Runtime.Serialization">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/System.Runtime.Serialization.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.ServiceModel.Web">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/System.ServiceModel.Web.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Transactions">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/System.Transactions.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Web">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/System.Web.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Windows">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/System.Windows.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Xml.Linq">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/System.Xml.Linq.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Xml.Serialization">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/System.Xml.Serialization.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Xml">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/System.Xml.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/System.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="mscorlib">
+      <HintPath>/Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/NetStandard/compat/2.1.0/shims/netfx/mscorlib.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.Timeline">
+      <HintPath>Library/ScriptAssemblies/Unity.Timeline.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.TestTools.CodeCoverage.Editor.OpenCover.Mono.Reflection">
+      <HintPath>Library/ScriptAssemblies/Unity.TestTools.CodeCoverage.Editor.OpenCover.Mono.Reflection.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>Library/ScriptAssemblies/UnityEngine.UI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.EditorCoroutines.Editor">
+      <HintPath>Library/ScriptAssemblies/Unity.EditorCoroutines.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.VisualScripting.SettingsProvider.Editor">
+      <HintPath>Library/ScriptAssemblies/Unity.VisualScripting.SettingsProvider.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.Performance.Profile-Analyzer.Editor">
+      <HintPath>Library/ScriptAssemblies/Unity.Performance.Profile-Analyzer.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.TestTools.CodeCoverage.Editor">
+      <HintPath>Library/ScriptAssemblies/Unity.TestTools.CodeCoverage.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.TestTools.CodeCoverage.Editor.OpenCover.Model">
+      <HintPath>Library/ScriptAssemblies/Unity.TestTools.CodeCoverage.Editor.OpenCover.Model.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.PlasticSCM.Editor">
+      <HintPath>Library/ScriptAssemblies/Unity.PlasticSCM.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.VisualScripting.State.Editor">
+      <HintPath>Library/ScriptAssemblies/Unity.VisualScripting.State.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.Timeline.Editor">
+      <HintPath>Library/ScriptAssemblies/Unity.Timeline.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.VisualScripting.Shared.Editor">
+      <HintPath>Library/ScriptAssemblies/Unity.VisualScripting.Shared.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.VisualStudio.Editor">
+      <HintPath>Library/ScriptAssemblies/Unity.VisualStudio.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>Library/ScriptAssemblies/Unity.TextMeshPro.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.VisualScripting.Core">
+      <HintPath>Library/ScriptAssemblies/Unity.VisualScripting.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro.Editor">
+      <HintPath>Library/ScriptAssemblies/Unity.TextMeshPro.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEditor.UI">
+      <HintPath>Library/ScriptAssemblies/UnityEditor.UI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.VisualScripting.Core.Editor">
+      <HintPath>Library/ScriptAssemblies/Unity.VisualScripting.Core.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.Rider.Editor">
+      <HintPath>Library/ScriptAssemblies/Unity.Rider.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.VisualScripting.State">
+      <HintPath>Library/ScriptAssemblies/Unity.VisualScripting.State.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.VSCode.Editor">
+      <HintPath>Library/ScriptAssemblies/Unity.VSCode.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.VisualScripting.Flow">
+      <HintPath>Library/ScriptAssemblies/Unity.VisualScripting.Flow.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.VisualScripting.Flow.Editor">
+      <HintPath>Library/ScriptAssemblies/Unity.VisualScripting.Flow.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+  </ItemGroup>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+  <ItemGroup>
+    <ProjectCapability Remove="LaunchProfiles" />
+    <ProjectCapability Remove="SharedProjectReferences" />
+    <ProjectCapability Remove="ReferenceManagerSharedProjects" />
+    <ProjectCapability Remove="ProjectReferences" />
+    <ProjectCapability Remove="ReferenceManagerProjects" />
+    <ProjectCapability Remove="COMReferences" />
+    <ProjectCapability Remove="ReferenceManagerCOM" />
+    <ProjectCapability Remove="AssemblyReferences" />
+    <ProjectCapability Remove="ReferenceManagerAssemblies" />
+  </ItemGroup>
+</Project>
+
+
+
+README.md
+
+# VisionSimulation
+Collection of Unity simulations for visual impairments and vision correction.
+
+
+
+ToolboxFocusProvider.cs
+
+using UnityEngine;
+
+[DisallowMultipleComponent]
+public class ToolboxFocusProvider : MonoBehaviour
+{
+    public Defocus defocus;
+    public bool useCombinedRay = true;
+    public bool drawDebugRay = true;
+    public float debugRayLength = 10f;
+
+    private EyeTrackingToolbox toolbox;
+
+    private void Awake()
+    {
+        if (defocus == null)
+        {
+            defocus = GetComponent<Defocus>();
+        }
+    }
+
+    private void Start()
+    {
+        toolbox = EyeTrackingToolbox.Instance;
+
+        if (toolbox == null)
+        {
+            Debug.LogError("ToolboxFocusProvider: EyeTrackingToolbox.Instance not found.");
+        }
+
+        if (defocus == null)
+        {
+            Debug.LogError("ToolboxFocusProvider: Defocus reference missing.");
+        }
+    }
+
+    private void Update()
+    {
+        if (toolbox == null || defocus == null)
+        {
+            return;
+        }
+
+        GazeData gazeData = toolbox.GetGazeData();
+        Ray focusRay = gazeData.combinedRayWorld;
+
+        if (focusRay.direction.sqrMagnitude < 0.0001f)
+        {
+            return;
+        }
+
+        defocus.SetExternalFocusRay(focusRay, 0f);
+
+        if (drawDebugRay)
+        {
+            Debug.DrawRay(focusRay.origin, focusRay.direction * debugRayLength, Color.cyan);
+        }
+    }
+}
+
+
+
+
+DummyEyeTracker.cs
+
+using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics;
+using UnityEngine;
+public class DummyEyeTracker : MonoBehaviour, IEyeTracker
+{
+    // DummyEyeTracker simulates an eye tracker by generating gaze data based on the camera's transform (and curser position).
+    // It can be used for testing purposes when a real eye tracker is not available.
+    // It is MonoBehaviour and is added as Compoenent in EyeTrackingToolbox to call Update/Coroutine 
+    private GazeData currentGazeData;
+    private GameObject cam;
+    private Stopwatch stopwatch;
+    private float simulatedIpd = 0.064f; // default is 64mm
+    private float simulatedNoise = 0.0f; // default is 0.0
+    private bool backgroundSampling = false;
+    private Coroutine samplingCoroutine;
+    public float interval = 0.008f; // sampling interval for generating dummy gaze data
+
+
+    // Initialize the dummy eye tracker and set simulated gaze properties
+    public void Initialize(float ipd,float noise)
+    {
+        // Find camera object
+        cam = GameObject.Find("Main Camera");
+
+        // Initialize and start the stopwatch
+        stopwatch = new Stopwatch();
+        stopwatch.Start();
+
+        currentGazeData = new GazeData();
+
+        // Set the simulated IPD and noise
+        simulatedIpd = ipd;
+        simulatedNoise = noise;
+        UnityEngine.Debug.Log("Dummy eye tracker initialized with IPD: " + simulatedIpd + " and noise: " + simulatedNoise);
+    }
+
+    private void Update()
+    {
+    }    
+
+    public void StartListening()
+    {
+        backgroundSampling = true;
+        UnityEngine.Debug.Log("Dummy eye tracker started listening");
+
+        if (samplingCoroutine == null)
+        {
+            samplingCoroutine = StartCoroutine(SamplingCoroutine(interval));
+        }
+    }
+
+    public void StopListening()
+    {
+        backgroundSampling = false;
+
+        if (samplingCoroutine != null)
+        {
+            StopCoroutine(samplingCoroutine);
+            samplingCoroutine = null;
+        }
+    }
+
+    private IEnumerator SamplingCoroutine(float interval)
+    {
+        while (backgroundSampling)
+        {
+            currentGazeData = SimulatedGazeData();
+            EyeTrackingEvent.TriggerEvent(currentGazeData);
+            yield return new WaitForSeconds(interval);
+        }
+    }
+    
+    // Initialize the dummy eye tracker with default noise
+    public void Initialize(float ipd)
+    {
+        // Find camera object
+        cam = GameObject.Find("Main Camera");
+
+        // Initialize and start the stopwatch
+        stopwatch = new Stopwatch();
+        stopwatch.Start();
+
+        currentGazeData = new GazeData();
+
+        // Set the simulated IPD
+        simulatedIpd = ipd;
+        UnityEngine.Debug.Log("Dummy eye tracker initialized with IPD: " + simulatedIpd + " and noise: " + simulatedNoise);
+
+    }
+    
+    // initialize the default eye tracker with default IPD and noise
+    public void Initialize()
+    {
+        // Find camera object
+        cam = GameObject.Find("Main Camera");
+
+        // Initialize and start the stopwatch
+        stopwatch = new Stopwatch();
+        stopwatch.Start();
+
+        currentGazeData = new GazeData();
+        UnityEngine.Debug.Log("Dummy eye tracker initialized with IPD: " + simulatedIpd + " and noise: " + simulatedNoise);
+
+    }
+
+    // Calibrate eye tracking
+    public void Calibrate()
+    {
+        // so far we dont simulate a calibratio
+        return;
+    }
+
+    // Get the current gaze point
+    public GazeData GetGazeData()
+    {
+        return currentGazeData;
+    }   
+
+    private GazeData SimulatedGazeData()
+    {
+        // Simulate gaze data based ray casting from the camera in the direction of the cursor
+        Camera cam = Camera.main;
+        RaycastHit hit;
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        UnityEngine.Debug.DrawRay(ray.origin, ray.direction * 1000, Color.red);
+
+        Physics.Raycast(ray, out hit);
+
+        Vector3 leftGazeOriginWorld = cam.transform.position - cam.transform.right * simulatedIpd / 2;
+        Vector3 rightGazeOriginWorld = cam.transform.position + cam.transform.right * simulatedIpd / 2;
+        Vector3 leftGazeDirectionWorld = hit.point - leftGazeOriginWorld;
+        Vector3 rightGazeDirectionWorld = hit.point - rightGazeOriginWorld;
+        // normalize gaze rayDirection
+        leftGazeDirectionWorld.Normalize();
+        rightGazeDirectionWorld.Normalize();
+        // get the local camera coordinates for the gaze rays
+        Vector3 leftGazeOriginLocal = cam.transform.InverseTransformDirection(leftGazeDirectionWorld);
+        Vector3 rightGazeOriginLocal = cam.transform.InverseTransformDirection(rightGazeDirectionWorld);
+        // simulate gaze rays in local (camera) coordinates
+        Ray leftGazeRay = new Ray(new Vector3(- simulatedIpd / 2,0,0), leftGazeOriginLocal);    
+        Ray rightGazeRay = new Ray(new Vector3(simulatedIpd / 2,0,0), rightGazeOriginLocal);
+        Ray combinedGazeRay = new Ray(new Vector3(0,0,0), Vector3.Normalize(leftGazeOriginLocal + rightGazeOriginLocal));
+        
+        GazeData simulatedGazeData = new GazeData(); 
+        simulatedGazeData.deviceTimestamp = stopwatch.ElapsedMilliseconds;
+        simulatedGazeData.unityTimestamp = UnityEngine.Time.time;
+        
+        simulatedGazeData.leftRayLocal = leftGazeRay;
+        simulatedGazeData.rightRayLocal = rightGazeRay;
+        simulatedGazeData.combinedRayLocal = combinedGazeRay;
+        simulatedGazeData.gazeDistance = Vector3.Distance(hit.point, cam.transform.position);
+        simulatedGazeData.leftPupilDiameter = 4.0f;
+        simulatedGazeData.rightPupilDiameter = 4.0f;
+        simulatedGazeData.leftEyeOpenness = 1.0f;
+        simulatedGazeData.rightEyeOpenness = 1.0f;
+        simulatedGazeData.leftValidity = true;
+        simulatedGazeData.rightValidity = true;
+
+        // add gaussian noise to the gaze data
+        //TODO: implement noise
+        return simulatedGazeData;
+    }
+ }
+
+
+
+VarjoEyeTracker.cs
+
+#if USE_VARJO
+using UnityEngine;
+using Varjo.XR;
+using System.Collections;
+using System.Collections.Generic;
+
+public class VarjoEyeTracker :  MonoBehaviour,IEyeTracker
+{
+    private GazeData currentGazeData;
+    private bool backgroundSampling = false;
+    private List<VarjoEyeTracking.GazeData> dataSinceLastUpdate; // Varjo-provided list of gaze data
+    private List<VarjoEyeTracking.EyeMeasurements> eyeMeasurementsSinceLastUpdate; // Varjo-provided list of eye measurements
+    private static Queue<GazeData> _gazeSamples; // reference to the queue of gaze samples
+    private Coroutine samplingCoroutine;
+
+
+    public void Initialize()
+    {
+        VarjoEyeTracking.SetGazeOutputFilterType(VarjoEyeTracking.GazeOutputFilterType.Standard); // Standard or None
+        VarjoEyeTracking.SetGazeOutputFrequency(VarjoEyeTracking.GazeOutputFrequency.MaximumSupported); // MaximumSupported, Frequency100Hz, or Frequency200Hz
+		Debug.Log("Varjo eye tracking initialized.");
+    }
+
+    public void Calibrate()
+    {
+        if (VarjoEyeTracking.RequestGazeCalibration())
+        {
+            Debug.Log("Varjo gaze calibration successful. Quality left: " + VarjoEyeTracking.GetGazeCalibrationQuality().left + " Quality right: " + VarjoEyeTracking.GetGazeCalibrationQuality().right);
+        }
+        else
+        {
+            Debug.Log("Varjo gaze calibration failed.");   
+        }
+    }
+
+    public GazeData GetGazeData()
+    {   
+        if(backgroundSampling) // if we perform background sampling, return the latest gaze data from the queue
+        {
+            return currentGazeData;
+        }
+        else // ohterwise we have to get fresh Varjo data
+        {
+            return VarjoGazeDataToGazeData(VarjoEyeTracking.GetGaze(), VarjoEyeTracking.GetEyeMeasurements());
+        }
+    }
+	
+	private IEnumerator SamplingCoroutine()
+    {
+        while (backgroundSampling)
+        {
+            int nDataSamples = VarjoEyeTracking.GetGazeList(out dataSinceLastUpdate, out eyeMeasurementsSinceLastUpdate);
+            Debug.Log(nDataSamples + " new samples from EyeTracker.");
+			for(int i = 0; i < nDataSamples; i++)
+            {
+				
+                GazeData gazeData = VarjoGazeDataToGazeData(dataSinceLastUpdate[i], eyeMeasurementsSinceLastUpdate[i]);
+                EyeTrackingEvent.TriggerEvent(gazeData);
+                
+                // set the current gaze data to the last gaze data in the list
+                if (i == dataSinceLastUpdate.Count - 1)
+                {
+                    currentGazeData = gazeData;
+                }
+            }
+            yield return null;
+
+            if (!backgroundSampling)
+                break;
+        }
+        UnityEngine.Debug.Log("Stopped background gaze sampling.");
+    }
+
+
+    public void StartListening()
+    {
+        backgroundSampling = true;
+        UnityEngine.Debug.Log("Varjo eye tracker started listening");
+
+        if (samplingCoroutine == null)
+        {
+            samplingCoroutine = StartCoroutine(SamplingCoroutine());
+        }
+    }
+    
+    public void StopListening()
+    {
+        backgroundSampling = false;
+
+        if (samplingCoroutine != null)
+        {
+            StopCoroutine(samplingCoroutine);
+            samplingCoroutine = null;
+        }
+    }
+
+    private GazeData VarjoGazeDataToGazeData(VarjoEyeTracking.GazeData varjoData)
+    {
+        GazeData gazeData = new GazeData();
+        gazeData.deviceTimestamp = varjoData.captureTime;
+        
+        // eye tracking status: 0 – Data unavailable; 1 User is wearing the headset, but gaze tracking is being calibrated; 2 – Data is valid
+        gazeData.leftValidataBitMap = (ulong) varjoData.leftStatus;
+        gazeData.rightValidataBitMap = (ulong) varjoData.rightStatus;
+        
+        // left eye gaze ray
+        gazeData.leftRayLocal = new Ray(varjoData.left.origin, varjoData.left.forward);
+        // right eye gaze ray
+        gazeData.rightRayLocal= new Ray(varjoData.right.origin, varjoData.right.forward);
+        // combined gaze ray
+        gazeData.combinedRayLocal = new Ray(varjoData.gaze.origin, varjoData.gaze.forward);
+        // gaze distance
+        gazeData.gazeDistance = varjoData.focusDistance;
+
+        gazeData.leftValidity = (int) varjoData.leftStatus;;
+        gazeData.rightValidity = (int) varjoData.rightStatus;
+
+        return gazeData;
+    }
+
+
+    private GazeData VarjoGazeDataToGazeData(VarjoEyeTracking.GazeData varjoData, VarjoEyeTracking.EyeMeasurements varjoEyeMeasurements)
+    {
+        GazeData gazeData = VarjoGazeDataToGazeData(varjoData);
+         
+         // add pupil diameters from eyeMeasurements
+        gazeData.leftEyePupilDiameter = varjoEyeMeasurements.leftPupilDiameterInMM;
+        gazeData.rightEyePupilDiameter = varjoEyeMeasurements.rightPupilDiameterInMM;
+        gazeData.leftEyeOpenness = varjoEyeMeasurements.leftEyeOpenness;
+        gazeData.rightEyeOpenness = varjoEyeMeasurements.rightEyeOpenness;
+        
+        return gazeData;
+    }
+}
+#endif // USE_VARJO
+
+
+
+ViveEyeTracker.cs
+
+#if USE_VIVE
+using UnityEngine;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using ViveSR.anipal.Eye;
+using Unity.VisualScripting;
+using System;
+
+public class ViveEyeTracker : IEyeTracker
+{
+    //private EyeCallbackHandler _callbackHandler;
+    private bool eye_callback_registered = false;
+    //private Queue<GazeData> _gazeSamples;
+    private static GazeData currentGazeData;
+
+    public void Initialize()
+    {
+        // check if SRanipal_Eye_Framework is already present in scene
+        SRanipal_Eye_Framework sranipal = SRanipal_Eye_Framework.Instance;
+        // if not, add it
+        if (sranipal == null)
+        {
+            GameObject go = new GameObject("SRanipal_Eye_Framework");
+            sranipal = go.AddComponent<SRanipal_Eye_Framework>();
+            // set go to not be destroyed on scene change
+            GameObject.DontDestroyOnLoad(go);
+        }
+        
+        // Activate Eye Data Callback
+        sranipal.EnableEyeDataCallback = true;
+        sranipal.StartFramework();
+
+        Debug.Log(SRanipal_Eye_Framework.Status);
+        Debug.Log(SRanipal_Eye_Framework.FrameworkStatus.WORKING);
+
+    }
+
+    public void Calibrate()
+    {
+        SRanipal_Eye.LaunchEyeCalibration();
+    }
+
+    public void StartListening()
+    {
+        if (SRanipal_Eye_Framework.Instance.EnableEyeDataCallback && eye_callback_registered == false)
+        {
+            eye_callback_registered = true;
+            SRanipal_Eye.WrapperRegisterEyeDataCallback(Marshal.GetFunctionPointerForDelegate((SRanipal_Eye.CallbackBasic)EyeCallback));
+            Debug.Log("Registered Eye Data Callback");
+            Debug.Log(SRanipal_Eye_Framework.FrameworkStatus.WORKING);
+            Debug.Log(SRanipal_Eye_Framework.Status);
+        }
+    }
+
+    public void StopListening()
+    {
+        if (eye_callback_registered == true)
+        {
+            SRanipal_Eye.WrapperUnRegisterEyeDataCallback(Marshal.GetFunctionPointerForDelegate((SRanipal_Eye.CallbackBasic)EyeCallback));
+            eye_callback_registered = false;
+        }
+    }
+
+    internal class MonoPInvokeCallbackAttribute : System.Attribute
+    {
+        public MonoPInvokeCallbackAttribute() { }
+    }
+
+    /// <summary>
+    /// Eye tracking data callback thread.
+    /// Reports data at ~120hz
+    /// MonoPInvokeCallback attribute required for IL2CPP scripting backend
+    /// </summary>
+    /// <param name="eye_data">Reference to latest eye_data</param>
+    [MonoPInvokeCallback]
+    public static void EyeCallback(ref EyeData eyeData)
+    {
+        currentGazeData = EyeData2GazeData(eyeData);
+        EyeTrackingEvent.TriggerEvent(currentGazeData);
+        
+        //_gazeSamples.Enqueue(currentGazeData);
+        //if (_gazeSamples.Count > 1000) // keep max queue length at 1000
+        //{
+        //    _gazeSamples.Dequeue();
+        //}
+    }
+
+    public GazeData GetGazeData()
+    {
+        // TODO: decide if we want to return gaze data also without callback, then we have to actually get new data from SRanipal here
+        return currentGazeData;
+    }
+
+    // transform SRAnipal eyeData to general GazeData struct
+    // this also converts coordinate system direction and mm to m
+    private static GazeData EyeData2GazeData(EyeData eyeData)
+    {
+        GazeData gazeData = new GazeData();
+
+        // ET timestamp
+        gazeData.deviceTimestamp = eyeData.timestamp;
+        
+        // validity
+        gazeData.leftValidity = eyeData.verbose_data.left.GetValidity(SingleEyeDataValidity.SINGLE_EYE_DATA_EYE_OPENNESS_VALIDITY);
+        gazeData.rightValidity = eyeData.verbose_data.right.GetValidity(SingleEyeDataValidity.SINGLE_EYE_DATA_EYE_OPENNESS_VALIDITY);
+
+        // left eye
+        Vector3 origin = 0.001f * eyeData.verbose_data.left.gaze_origin_mm; // convert from mm to m
+        origin.x = -origin.x; // mirror x-axis
+        Vector3 direction = eyeData.verbose_data.left.gaze_direction_normalized;
+        direction.x = -direction.x; // mirror x-axis
+        gazeData.leftRayLocal = new Ray(origin, direction);
+        gazeData.leftEyeOpenness = eyeData.verbose_data.left.eye_openness;
+        gazeData.leftPupilDiameter = eyeData.verbose_data.left.pupil_diameter_mm;
+        //gazeData.leftPupilPosition = eyeData.verbose_data.left.pupil_position_in_sensor_area;
+
+        // right eye
+        origin = 0.001f * eyeData.verbose_data.right.gaze_origin_mm;
+        origin.x = -origin.x;
+        direction = eyeData.verbose_data.right.gaze_direction_normalized;
+        direction.x = -direction.x;
+        gazeData.rightRayLocal = new Ray(origin, direction);
+        gazeData.rightEyeOpenness = eyeData.verbose_data.right.eye_openness;
+        gazeData.rightPupilDiameter = eyeData.verbose_data.right.pupil_diameter_mm;
+        //gazeData.rightPupilPosition = eyeData.verbose_data.right.pupil_position_in_sensor_area;
+
+        // combined gaze ray
+        origin = 0.001f * eyeData.verbose_data.combined.eye_data.gaze_origin_mm;
+        origin.x = -origin.x;
+        direction = eyeData.verbose_data.combined.eye_data.gaze_direction_normalized;
+        direction.x = -direction.x;
+        gazeData.combinedRayLocal = new Ray(origin, direction);
+
+        // gaze distance
+        gazeData.gazeDistance = eyeData.verbose_data.combined.convergence_distance_mm * 0.001f;
+
+        return gazeData;
+    }
+}
+#endif
+
+
+
+EyeTrackingEvent.cs
+
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using System;
+
+// This class is used to trigger an event when eye tracking data is available
+// This is used to decouple the subsciption to the event from the actual eye tracking implementation
+// The individual eye tracking implementations will trigger this event when new data is available
+public static class EyeTrackingEvent
+{
+    public static event Action<GazeData> OnDataAvailable;
+
+    // use a trigger method to invoke the event 
+    // can be extended to filter/validate the data before invoking the event
+    public static void TriggerEvent(GazeData data)
+    {
+        OnDataAvailable?.Invoke(data);
+    }
+
+    // Check if there are any subscribers to the event
+    public static bool HasSubscribers()
+    {
+        return OnDataAvailable != null;
+    }
+}
+
+
+
+EyeTrackingToolbox.cs
+
+using System.Collections;
+using System.Collections.Generic;
+using Unity.VisualScripting;
+using UnityEngine;
+using System;
+using System.Text;
+using System.Threading;
+using System.IO;
+
+#if USE_VIVE
+using ViveSR.anipal.Eye;
+#endif
+
+public class EyeTrackingToolbox : MonoBehaviour
+{
+    public static EyeTrackingToolbox Instance { get; private set; }
+    private static float unityTimestamp; // Each thread has access to static variables, so that the timestamp Time.time can be written to the variable unityTimestamp and we can use this as a timestamp even if the function is called in another thread.
+    public enum ETProvider
+    {
+        Dummy,
+        HTCViveSRanipal,
+        Varjo,
+        PupilNeon,
+        MetaQuest,
+        XTAL
+    }
+    [Header("Eye Tracking Settings")]
+
+    public ETProvider etprovider = ETProvider.HTCViveSRanipal;
+    private IEyeTracker eyeTracker;
+    public KeyCode calibrateKey = KeyCode.C;
+
+    private GazeData currentGazeData; // for gaze sample of the current frame
+    public Queue<GazeData> gazeTrackingQueue { get; private set; } // TODO: Can it be used publicly? Or should it be private?
+
+    // Enum to define different options for GameObject Tracking
+    public enum TrackingOptions
+    {
+        localTransform,
+        globalTransform,
+    }
+
+    // Define a class to hold the dropdown option and associated GameObject
+    [Serializable]
+    public class TrackedObjectOptions
+    {
+        public TrackingOptions trackingOptions;
+        public GameObject gameObject;
+    }
+
+    public bool saveRaycastHitpoint = false; // check for raycast intersection with objects during runtime
+    public string OutputFolder   { get; private set; } // folder for the recording output files
+
+    [Header("Object Tracking Settings")]
+    // List to hold the variables with dropdown options and associated GameObjects
+    [SerializeField] private List<TrackedObjectOptions> trackedObjectList = new List<TrackedObjectOptions>();
+
+
+    private string objectTrackingFile; // output file for object tracking (bound to framerate)
+    private string gazeTrackingFile; // output file for eye tracking data (bound to eye tracking frequency)
+    Queue trackingDataQueue = new Queue();
+    static string msgBuffer = "";
+
+    private bool isObjectRecording = true;
+    public bool isRecording {get; private set;} = false;
+    private Thread savingThread; // background thread for writing to files
+
+    void Awake()
+    {
+        // set US culture for number formatting in strings
+        System.Threading.Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+        System.Threading.Thread.CurrentThread.CurrentUICulture = new System.Globalization.CultureInfo("en-US");
+        
+        if (Instance == null)
+        {
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+        else
+        {
+            Debug.Log("Singleton instance already existed.");
+            Destroy(gameObject);
+            return;
+        }
+
+        gazeTrackingQueue = new Queue<GazeData>();
+
+        switch (etprovider)
+        {
+             case ETProvider.Dummy:
+                eyeTracker = gameObject.AddComponent<DummyEyeTracker>(); // add DummyEyeTracker as component so that Update/Coroutine is called
+                eyeTracker.Initialize();
+                break;
+#if USE_VIVE
+            case ETProvider.HTCViveSRanipal:
+                // start SRanipal // todo, should be part of the interface I guess ???
+                //Instance.AddComponent<SRanipal_Eye_Framework>();
+       
+                eyeTracker = new ViveEyeTracker();
+                eyeTracker.Initialize();
+                Debug.Log("HTC Vive SRanipal initialized.");
+                break;
+#endif
+#if USE_VARJO
+            case ETProvider.Varjo:
+                eyeTracker = new VarjoEyeTracker();
+                eyeTracker.Initialize();
+                break;
+#endif
+#if USE_NEON
+            case ETProvider.PupilNeon:
+                eyeTracker = new NeonEyeTracker();
+                break;
+#endif
+#if USE_QUEST
+            case ETProvider.MetaQuest:
+                eyeTracker = new QuestEyeTracker();
+                eyeTracker.Initialize();
+                Debug.Log("Meta Quest initialized.");
+                break;
+#endif
+#if USE_XTAL
+            case ETProvider.XTAL:
+                eyeTracker = new XtalEyeTracker();
+                Debug.Log("XTAL eye tracker");
+                eyeTracker.Initialize();
+                break;
+#endif
+            default:
+                Debug.Log("No Eye Tracker selected. Using dummy eye tracker.");
+                eyeTracker = gameObject.AddComponent<DummyEyeTracker>(); // add DummyEyeTracker as component so that Update/Coroutine is called
+                eyeTracker.Initialize();
+                break;
+        }
+
+        // event handler for gaze data
+        EyeTrackingEvent.OnDataAvailable += HandleData; // subscribe to event
+
+        // test Datetime accuracy
+        DateTime t1 = DateTime.Now;
+        DateTime t2;
+        while ((t2 = DateTime.Now) == t1)
+        {
+            Debug.Log("DateTime accuracy: " + (t2 - t1).TotalMilliseconds + "ms");
+        }
+
+        // set US culture for number formatting in strings
+        System.Threading.Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+        System.Threading.Thread.CurrentThread.CurrentUICulture = new System.Globalization.CultureInfo("en-US");
+
+        // set default output folder
+        OutputFolder = null;
+    }
+
+    public void SetOutputFolder(string folder)
+    {
+        OutputFolder = folder;
+    }
+
+    private void Start()
+    {
+        eyeTracker.StartListening(); // start the background event system
+    }
+
+    void Update()
+    {
+        unityTimestamp = Time.time;
+        // TODO change to get-function
+        //currentGazeData = eyeTracker.GetGazeData();
+        if (Input.GetKeyDown(calibrateKey))
+        {
+            Calibrate();
+        }
+
+        if (isRecording && isObjectRecording)
+        {
+            QueueTrackingData(trackingDataQueue);
+        }
+    }
+
+    public GazeData GetGazeData()
+    {
+        currentGazeData.leftRayWorld = new Ray(Camera.main.transform.TransformPoint(currentGazeData.leftRayLocal.origin), Camera.main.transform.TransformDirection(currentGazeData.leftRayLocal.direction));
+        currentGazeData.rightRayWorld = new Ray(Camera.main.transform.TransformPoint(currentGazeData.rightRayLocal.origin), Camera.main.transform.TransformDirection(currentGazeData.rightRayLocal.direction));
+        currentGazeData.combinedRayWorld = new Ray(Camera.main.transform.TransformPoint(currentGazeData.combinedRayLocal.origin), Camera.main.transform.TransformDirection(currentGazeData.combinedRayLocal.direction));
+        return currentGazeData;
+    }
+
+    public void Calibrate()
+    {
+        Debug.Log("Starting eye tracking calibration");
+        eyeTracker.Calibrate();
+    }
+
+    // start with queueing tracking data
+    public void StartRecording(string outputFileName)
+    {
+        if (!isRecording)
+        {
+            gazeTrackingQueue.Clear(); // hier oder in stop tracking
+            trackingDataQueue.Clear();
+            if (OutputFolder == null)
+            {
+                Debug.LogError("Output folder not set. Please set the output folder with SetOutputFolder(string folder) before starting the recording.");
+            }
+            if (Path.HasExtension(outputFileName))
+            {
+                objectTrackingFile = Path.Combine(OutputFolder, Path.GetFileNameWithoutExtension(outputFileName) + "_head.csv");
+                gazeTrackingFile = Path.Combine(OutputFolder, Path.GetFileNameWithoutExtension(outputFileName) + "_gaze.csv");
+            }
+            else
+            {
+                objectTrackingFile = Path.Combine(OutputFolder, outputFileName + "_head.csv");
+                gazeTrackingFile = Path.Combine(OutputFolder, outputFileName + "_gaze.csv");
+            }
+            Debug.Log("Object tracking file " + objectTrackingFile);
+            Debug.Log("Gaze tracking file " + gazeTrackingFile);
+            
+            isRecording = true;
+
+            Debug.Log("Start recording: " + eyeTracker);
+            
+            // check if csv file already exists and change filename if necessary (e.g. _01...)
+            int counter = 0;
+            while (File.Exists(objectTrackingFile) || File.Exists(gazeTrackingFile))
+            {
+                counter++;
+                objectTrackingFile = Path.Combine(OutputFolder, outputFileName.Substring(0, outputFileName.Length - 4) + "_" + counter.ToString("D2") + "_head.csv");
+                Debug.Log("Object tracking file already exists. Changing filename to " + objectTrackingFile);
+                gazeTrackingFile = Path.Combine(OutputFolder, outputFileName.Substring(0, outputFileName.Length - 4) + "_" + counter.ToString("D2") + "_gaze.csv");
+            }
+            WriteHeader();
+            InvokeRepeating(nameof(Save), 0.0f, 1.0f); // save data to file every second
+        }
+    }
+    
+    // handle data of the event invoked by the eye tracker
+    private void HandleData(GazeData gazeData)
+    {
+        // gazeDate.unityTimestamp = Time.time; // set Unity timestamp for the current frame
+        gazeData.unityTimestamp = unityTimestamp; // If the static event is called from another thread, it appears that this function is called from this thread and does not have access to Time.time, so we use the static variable here.
+        currentGazeData = gazeData;
+        
+        if (isRecording)
+        {
+            gazeTrackingQueue.Enqueue(gazeData);
+        }
+    }
+
+    // stop the background saving of the tracking data
+    public void StopRecording()
+    {
+        isRecording = false;
+        // stop future invokes of Saving function
+        CancelInvoke(nameof(Save));
+
+        // Wait for current save to finish and then call one final WriteTrackingData to empty the queue
+        if (savingThread != null && savingThread.IsAlive)
+        {
+            savingThread.Join();
+        }
+        WriteTrackingData();
+
+        Debug.Log("Stopped Recording");
+    }
+
+    private void OnDisable()
+    {
+        if (eyeTracker != null)
+        {
+            eyeTracker.StopListening(); // stop the background gaze data sampling
+        }
+        if (EyeTrackingEvent.HasSubscribers()) // chek if EyeTrackingEvent.OnDataAvailable is != null, only then we can unsubscribe
+        {
+            EyeTrackingEvent.OnDataAvailable -= HandleData;
+        }
+    }
+    
+    // Write header for tracking files
+    private void WriteHeader()
+    {
+        // check if output folder exists
+        if (!Directory.Exists(OutputFolder))
+        {
+            Directory.CreateDirectory(OutputFolder);
+        }
+        StreamWriter sw = new StreamWriter(objectTrackingFile);
+
+        // header for object tracking file
+        string header = "unity_timestamp,";
+        header += "eye_timestamp,";
+
+        foreach (TrackedObjectOptions trackedObject in trackedObjectList)
+        {
+            if(trackedObject.gameObject == null)
+            {
+                header += ",,,,,,,"; // add 7 empty cells, object seems to be missing
+            }
+            else
+            {
+                switch (trackedObject.trackingOptions)
+                {
+                    case TrackingOptions.localTransform:
+                        header += trackedObject.gameObject.name + "_localPosition.x,";
+                        header += trackedObject.gameObject.name + "_localPosition.y,";
+                        header += trackedObject.gameObject.name + "_localPosition.z,";
+                        header += trackedObject.gameObject.name + "_localRotation.x,";
+                        header += trackedObject.gameObject.name + "_localRotation.y,";
+                        header += trackedObject.gameObject.name + "_localRotation.z,";
+                        header += trackedObject.gameObject.name + "_localRotation.w,";
+                        break;
+                    case TrackingOptions.globalTransform:
+                        header += trackedObject.gameObject.name + "_position.x,";
+                        header += trackedObject.gameObject.name + "_position.y,";
+                        header += trackedObject.gameObject.name + "_position.z,";
+                        header += trackedObject.gameObject.name + "_rotation.x,";
+                        header += trackedObject.gameObject.name + "_rotation.y,";
+                        header += trackedObject.gameObject.name + "_rotation.z,";
+                        header += trackedObject.gameObject.name + "_rotation.w,";
+                        break;
+                    default:
+                        Debug.LogError("Unknown option selected for " + trackedObject.gameObject.name);
+                        break;
+                }
+            }
+        }
+
+        if (saveRaycastHitpoint)
+        {
+            header += "hit_object,";
+            header += "hit_point.x,hit_point.y,hit_point.z,";
+        }
+
+        header += "messages,";
+        sw.WriteLine(header);
+        sw.Close();
+
+        // header for gaze tracking file
+        sw = new StreamWriter(gazeTrackingFile);
+        header = "unity_timestamp,";
+        header += "eye_timestamp,";
+        header += "left_validata,";
+        header += "left_eye_openness,";
+        header += "left_eye_pupil_diameter,";
+        header += "left_eye_origin.x,left_eye_origin.y,left_eye_origin.z,";
+        header += "left_eye_gaze.x,left_eye_gaze.y,left_eye_gaze.z,";
+        //header += "left_pupil_position.x,left_pupil_position.y,";
+        header += "right_validata,";
+        header += "right_eye_openness,";
+        header += "right_eye_pupil_diameter,";
+        header += "right_eye_origin.x,right_eye_origin.y,right_eye_origin.z,";
+        header += "right_eye_gaze.x,right_eye_gaze.y,right_eye_gaze.z,";
+        //header += "right_pupil_position.x,right_pupil_position.y,";
+        header += "combined_eye_origin.x,combined_eye_origin.y,combined_eye_origin.z,";
+        header += "combined_eye_gaze.x,combined_eye_gaze.y,combined_eye_gaze.z,";
+        header += "gaze_distance,";
+
+        sw.WriteLine(header);
+        sw.Close();
+    }
+
+    public void WriteMessage(string msg)
+    {
+        msgBuffer = msg;
+    }
+
+    private string GazeDataString(GazeData gazeDataSample)
+    {
+        StringBuilder datasetLine = new StringBuilder(350); // adjust capacity to your needs
+
+        datasetLine.Append(gazeDataSample.unityTimestamp.ToSafeString() + ",");
+        datasetLine.Append(gazeDataSample.deviceTimestamp.ToString() + ",");
+
+        // left eye
+        datasetLine.Append(gazeDataSample.leftValidity.ToString() + ",");
+        datasetLine.Append(gazeDataSample.leftEyeOpenness.ToString("F10") + ",");
+        datasetLine.Append(gazeDataSample.leftPupilDiameter.ToString("F10") + ",");
+        datasetLine.Append(gazeDataSample.leftRayLocal.origin.x.ToString("F10") + "," + gazeDataSample.leftRayLocal.origin.y.ToString("F10") + "," + gazeDataSample.leftRayLocal.origin.z.ToString("F10") + ",");
+        datasetLine.Append(gazeDataSample.leftRayLocal.direction.x.ToString("F10") + "," + gazeDataSample.leftRayLocal.direction.y.ToString("F10") + "," + gazeDataSample.leftRayLocal.direction.z.ToString("F10") + ",");
+        //datasetLine.Append(gazeDataSample.leftPupilPosition.x.ToString("F10") + "," + gazeDataSample.leftPupilPosition.y.ToString("F10") + ",");
+
+        // right eye
+        datasetLine.Append(gazeDataSample.rightValidity.ToString() + ",");
+        datasetLine.Append(gazeDataSample.leftEyeOpenness.ToString("F10") + ",");
+        datasetLine.Append(gazeDataSample.rightPupilDiameter.ToString("F10") + ",");
+        datasetLine.Append(gazeDataSample.rightRayLocal.origin.x.ToString("F10") + "," + gazeDataSample.rightRayLocal.origin.y.ToString("F10") + "," + gazeDataSample.rightRayLocal.origin.z.ToString("F10") + ",");
+        datasetLine.Append(gazeDataSample.rightRayLocal.direction.x.ToString("F10") + "," + gazeDataSample.rightRayLocal.direction.y.ToString("F10") + "," + gazeDataSample.rightRayLocal.direction.z.ToString("F10") + ",");
+        //datasetLine.Append(gazeDataSample.rightPupilPosition.x.ToString("F10") + "," + gazeDataSample.rightPupilPosition.y.ToString("F10") + ",");
+
+        // combined eye
+        datasetLine.Append(gazeDataSample.combinedRayLocal.origin.x.ToString("F10") + "," + gazeDataSample.combinedRayLocal.origin.y.ToString("F10") + "," + gazeDataSample.combinedRayLocal.origin.z.ToString("F10") + ",");
+        datasetLine.Append(gazeDataSample.combinedRayLocal.direction.x.ToString("F10") + "," + gazeDataSample.combinedRayLocal.direction.y.ToString("F10") + "," + gazeDataSample.combinedRayLocal.direction.z.ToString("F10") + ",");
+        datasetLine.Append(gazeDataSample.gazeDistance.ToString("F10") + ",");
+        return (datasetLine.ToString());
+    }
+
+    private void QueueTrackingData(Queue queue)
+    {
+        // StringBuilder should be quite effiction: https://stackoverflow.com/questions/21078/most-efficient-way-to-concatenate-strings
+        StringBuilder datasetLine = new StringBuilder(700); // adjust capacity to your needs
+
+        // timestamp: use time at beginning of frame
+        datasetLine.Append(Time.time.ToString("F10") + ",");
+
+        // eye tracking timestampe
+        datasetLine.Append(currentGazeData.deviceTimestamp.ToString() + ",");
+
+        foreach (TrackedObjectOptions trackedObject in trackedObjectList)
+        {
+            if(trackedObject.gameObject == null)
+            {
+                datasetLine.Append(",,,,,,,"); // add 7 empty cells, object seems to be missing
+            }
+            else
+            {
+                switch (trackedObject.trackingOptions)
+                {
+                    case TrackingOptions.localTransform:
+                        datasetLine.Append(trackedObject.gameObject.transform.localPosition.x.ToString("F10") + ",");
+                        datasetLine.Append(trackedObject.gameObject.transform.localPosition.y.ToString("F10") + ",");
+                        datasetLine.Append(trackedObject.gameObject.transform.localPosition.z.ToString("F10") + ",");
+                        datasetLine.Append(trackedObject.gameObject.transform.localRotation.x.ToString("F10") + ",");
+                        datasetLine.Append(trackedObject.gameObject.transform.localRotation.y.ToString("F10") + ",");
+                        datasetLine.Append(trackedObject.gameObject.transform.localRotation.z.ToString("F10") + ",");
+                        datasetLine.Append(trackedObject.gameObject.transform.localRotation.w.ToString("F10") + ",");
+                        break;
+                    case TrackingOptions.globalTransform:
+                        datasetLine.Append(trackedObject.gameObject.transform.position.x.ToString("F10") + ",");
+                        datasetLine.Append(trackedObject.gameObject.transform.position.y.ToString("F10") + ",");
+                        datasetLine.Append(trackedObject.gameObject.transform.position.z.ToString("F10") + ",");
+                        datasetLine.Append(trackedObject.gameObject.transform.rotation.x.ToString("F10") + ",");
+                        datasetLine.Append(trackedObject.gameObject.transform.rotation.y.ToString("F10") + ",");
+                        datasetLine.Append(trackedObject.gameObject.transform.rotation.z.ToString("F10") + ",");
+                        datasetLine.Append(trackedObject.gameObject.transform.rotation.w.ToString("F10") + ",");
+                        break;
+                    default:
+                        Debug.LogError("Unknown option selected for " + trackedObject.gameObject.name);
+                        break;
+                }
+            }
+        }
+
+        if (saveRaycastHitpoint)
+        {
+            datasetLine.Append(GazeRaycast());
+        }
+
+        // buffered message
+        if (!String.IsNullOrEmpty(msgBuffer))
+        {
+            datasetLine.Append(msgBuffer + ",");
+            msgBuffer = "";
+        }
+        queue.Enqueue(datasetLine.ToString());
+    }
+
+    public string GazeRaycast()
+    {
+        RaycastHit hit;
+        Vector3 rayOrigin = Camera.main.transform.position + Camera.main.transform.rotation * currentGazeData.combinedRayLocal.origin;
+        Vector3 rayDirection = Camera.main.transform.rotation * currentGazeData.combinedRayLocal.direction;
+
+        if (Physics.Raycast(rayOrigin, rayDirection, out hit))
+        {
+
+            return hit.transform.name + "," + hit.point.x.ToString("F10") + "," + hit.point.y.ToString("F10") + "," + hit.point.z.ToString("F10") + ",";
+        }
+        else
+        {
+            return "NA,,,,";    
+        }
+    }
+
+    private void Save()
+    {
+        if (savingThread != null && savingThread.IsAlive)
+        {
+            Debug.Log("Previous saving thread is still running");
+            return;
+        }
+        savingThread = new Thread(WriteTrackingData);
+        savingThread.Start();
+    }
+
+    private void WriteTrackingData()
+    {
+        int counter = 0;
+        StreamWriter sw;
+        string datasetLine;
+
+        if (isObjectRecording)
+        {
+            try
+            {
+                sw = new StreamWriter(objectTrackingFile, true); //true for append
+
+                // dequeue trackingDataQueue until empty
+                while (trackingDataQueue.Count > 0)
+                {
+                    datasetLine = trackingDataQueue.Dequeue().ToString();
+                    counter++;
+                    sw.WriteLine(datasetLine); // write to file
+                }
+                sw.Close(); // close file
+            }
+            catch (Exception ex)
+            {
+                // Handle the exception (e.g., log it, display a message to the user, etc.)
+                Console.WriteLine("An error occurred while writing to the file: " + ex.Message);
+                // Optionally, you can log more detailed information about the exception:
+                Console.WriteLine(ex.ToString());
+            }
+            //Debug.Log("Writing " + counter.ToString() + " lines of object tracking data");
+        }
+
+        if (isRecording)
+        {
+            try
+            {
+                sw = new StreamWriter(gazeTrackingFile, true); //true for append
+                // dequeue gazeTrackingQueue until empty
+                counter = 0;
+                while (gazeTrackingQueue.Count > 0)
+                {
+                    datasetLine = GazeDataString(gazeTrackingQueue.Dequeue());
+                    sw.WriteLine(datasetLine); // write to file
+                    counter++;
+                }
+                sw.Close(); // close file
+            }
+            catch (Exception ex)
+            {
+                // Handle the exception (e.g., log it, display a message to the user, etc.)
+                Console.WriteLine("An error occurred while writing to the file: " + ex.Message);
+                // Optionally, you can log more detailed information about the exception:
+                Console.WriteLine(ex.ToString());
+            }
+            //Debug.Log("Writing " + counter.ToString() + " lines of gaze data");
+        }
+    }
+}
+
+
+
+GazeDebugger.cs
+
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class GazeDebugger : MonoBehaviour
+{
+    public Color colorLeft = Color.green;
+    public Color colorRight = Color.red;
+    public Color colorCombined = Color.white;
+    EyeTrackingToolbox eyeTracker;
+    // Start is called before the first frame update
+    void Start()
+    {
+        eyeTracker = EyeTrackingToolbox.Instance;
+        if (eyeTracker == null)
+        {
+            Debug.LogError("EyeTrackingToolbox instance not found. Make sure it is initialized before using GazeDebugger.");
+        }
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        // get current gaze data from the eye tracker
+        GazeData gazeData = eyeTracker.GetGazeData();
+        
+        // plot debug rays for left, right and combined eye
+        Debug.DrawRay(gazeData.leftRayWorld.origin, gazeData.leftRayWorld.direction * 10, colorLeft);
+        Debug.DrawRay(gazeData.rightRayWorld.origin, gazeData.rightRayWorld.direction * 10, colorRight);
+        Debug.DrawRay(gazeData.combinedRayWorld.origin, gazeData.combinedRayWorld.direction * 10, colorCombined);
+    }
+}
+
+
+
+IEyeTracker.cs
+
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using System;
+
+// Gaze data struct
+public struct GazeData
+{
+    public long deviceTimestamp; // VR headset/eye tracker-specific timestamp
+    public float unityTimestamp; // Unity frame timestamp (Do we want this?)
+    
+    public Ray leftRayLocal; // headset-relative left eye gaze ray
+    public Ray rightRayLocal; // headset-relative right eye gaze ray
+    public Ray combinedRayLocal; // headset-relative combined gaze ray
+
+    public Ray leftRayWorld; // left eye gaze ray in world coordinates
+    public Ray rightRayWorld; // right eye gaze ray in world coordinates
+    public Ray combinedRayWorld; // combined gaze ray in world coordinates
+
+    public float gazeDistance; // distance to the gaze point in meters
+
+    public float leftPupilDiameter; // left eye pupil diameter in mm
+    public float rightPupilDiameter; // right eye pupil diameter in mm
+    public float leftEyeOpenness; // left eye openness (0-1)
+    public float rightEyeOpenness; // right eye openness (0-1)
+
+
+    public bool leftValidity; // TODO, define what and how to use this
+    public bool rightValidity;
+}
+
+public interface IEyeTracker
+{    
+    // Initialize the eye tracker
+    public void Initialize();
+
+    // Calibrate eye tracking
+    public void Calibrate();
+
+    // Get the current gaze point
+    public GazeData GetGazeData();
+
+    public void StartListening();
+    public void StopListening();
+}
+
+
+
+ExperimentManager.cs
+
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class ExperimentManager : MonoBehaviour
+{
+    ExperimentManager Instance;
+    EyeTrackingToolbox eyetracker;
+    void Start()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+            DontDestroyOnLoad(gameObject); // Keep this object alive across scenes
+        }
+        else
+        {
+            Destroy(gameObject); // Destroy duplicate instances
+        }
+
+
+        // set output recording folder
+        eyetracker = EyeTrackingToolbox.Instance;
+        eyetracker.SetOutputFolder("./recordings/");
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+     // change scene when space is pressed
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            // Load the next scene in the build settings
+            int currentSceneIndex = UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex;
+            int nextSceneIndex = (currentSceneIndex + 1) % UnityEngine.SceneManagement.SceneManager.sceneCountInBuildSettings;
+            UnityEngine.SceneManagement.SceneManager.LoadScene(nextSceneIndex);
+        }   
+
+        // start gaze recording, when "s" is pressed
+        if (Input.GetKeyDown(KeyCode.S))
+        {
+            if (!eyetracker.isRecording)
+            {
+                Debug.Log("StartRecording");
+                eyetracker.StartRecording("test1.csv");
+            }
+            else
+            {
+                Debug.Log("StopRecording");
+                eyetracker.StopRecording();
+            }
+        }
+        GazeData gazeData = eyetracker.GetGazeData();
+    }
+}
+
+
+
+Assets > Simulations > Autofocals > ImprovedFocusProvider.cs
+
+using UnityEngine;
+
+[DisallowMultipleComponent]
+public class ImprovedFocusProvider : MonoBehaviour
+{
+    public Defocus defocus;
+
+    [Header("Debug")]
+    public bool drawDebugRay = true;
+    public float debugRayLength = 10f;
+    public float maxFocusRayDistance = 100f;
+
+    [Header("Stabilization")]
+    public float distanceDeadband = 0.20f;
+    public float candidateConfirmationTime = 0.08f;
+    public float distanceLerpSpeed = 12f;
+
+    private EyeTrackingToolbox toolbox;
+
+    private bool hasConfirmedFocus = false;
+    private float confirmedDistance = 0f;
+    private Collider confirmedCollider = null;
+
+    private Collider candidateCollider = null;
+    private float candidateDistance = 0f;
+    private float candidateStartTime = 0f;
+
+    private void Awake()
+    {
+        if (defocus == null)
+        {
+            defocus = GetComponent<Defocus>();
+        }
+    }
+
+    private void Start()
+    {
+        toolbox = EyeTrackingToolbox.Instance;
+
+        if (toolbox == null)
+        {
+            Debug.LogError("ImprovedFocusProvider: EyeTrackingToolbox.Instance not found.");
+        }
+
+        if (defocus == null)
+        {
+            Debug.LogError("ImprovedFocusProvider: Defocus reference missing.");
+            return;
+        }
+
+        // Improved-Skript setzt die Fokusdistanz selbst.
+        defocus.useMouse = false;
+        defocus.preferExternalRay = false;
+    }
+
+    private void Update()
+    {
+        if (toolbox == null || defocus == null)
+        {
+            return;
+        }
+
+        GazeData gazeData = toolbox.GetGazeData();
+        Ray focusRay = gazeData.combinedRayWorld;
+
+        if (focusRay.direction.sqrMagnitude < 0.0001f)
+        {
+            return;
+        }
+
+        bool hasHit = Physics.Raycast(focusRay, out RaycastHit hit, maxFocusRayDistance);
+
+        if (drawDebugRay)
+        {
+            float rayLength = hasHit ? hit.distance : debugRayLength;
+            Debug.DrawRay(focusRay.origin, focusRay.direction * rayLength, hasHit ? Color.cyan : Color.yellow);
+        }
+
+        if (!hasHit)
+        {
+            ApplyConfirmedFocus();
+            return;
+        }
+
+        float hitDistance = hit.distance;
+        Collider hitCollider = hit.collider;
+
+        if (!hasConfirmedFocus)
+        {
+            ConfirmFocus(hitCollider, hitDistance);
+            ApplyConfirmedFocus();
+            return;
+        }
+
+        bool sameObject = hitCollider == confirmedCollider;
+        float distanceDelta = Mathf.Abs(hitDistance - confirmedDistance);
+
+        // Kleine Distanzänderungen oder derselbe Collider => Fokus halten / sanft nachführen
+        if (sameObject || distanceDelta <= distanceDeadband)
+        {
+            confirmedDistance = Damp(confirmedDistance, hitDistance, distanceLerpSpeed);
+            if (sameObject)
+            {
+                confirmedCollider = hitCollider;
+            }
+
+            ClearCandidate();
+            ApplyConfirmedFocus();
+            return;
+        }
+
+        // Neuer Kandidat
+        if (hitCollider != candidateCollider)
+        {
+            candidateCollider = hitCollider;
+            candidateDistance = hitDistance;
+            candidateStartTime = Time.time;
+
+            ApplyConfirmedFocus();
+            return;
+        }
+
+        // Kandidat bleibt stabil -> nach kurzer Bestätigung übernehmen
+        candidateDistance = Damp(candidateDistance, hitDistance, distanceLerpSpeed);
+
+        if (Time.time - candidateStartTime >= candidateConfirmationTime)
+        {
+            ConfirmFocus(candidateCollider, candidateDistance);
+        }
+
+        ApplyConfirmedFocus();
+    }
+
+    private void ConfirmFocus(Collider col, float dist)
+    {
+        hasConfirmedFocus = true;
+        confirmedCollider = col;
+        confirmedDistance = Mathf.Max(0.0001f, dist);
+        ClearCandidate();
+    }
+
+    private void ClearCandidate()
+    {
+        candidateCollider = null;
+        candidateDistance = 0f;
+        candidateStartTime = 0f;
+    }
+
+    private void ApplyConfirmedFocus()
+    {
+        if (hasConfirmedFocus)
+        {
+            defocus.SetFocusDistance(confirmedDistance);
+        }
+    }
+
+    private float Damp(float current, float target, float speed)
+    {
+        float t = 1f - Mathf.Exp(-speed * Time.deltaTime);
+        return Mathf.Lerp(current, target, t);
+    }
+}
+
+
+
+Assets > Simulations > Logging > FocusMetricsRecorder.cs
+
+using System.IO;
+using System.Text;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+[DisallowMultipleComponent]
+public class FocusMetricsRecorder : MonoBehaviour
+{
+    public Defocus defocus;
+
+    [Header("Logging")]
+    public bool autoStartOnPlay = true;
+    public string outputFolderName = "FocusMetrics";
+    public string fileBaseName = "focus_metrics";
+    public string algorithmName = "";
+    public float flushInterval = 1.0f;
+
+    [Header("Raycast Metrics")]
+    public float maxFocusRayDistance = 100f;
+    public float minSwitchDistanceDelta = 0.05f;
+    public float switchBackWindow = 0.35f;
+
+    private EyeTrackingToolbox toolbox;
+    private string filePath;
+    private StringBuilder buffer = new StringBuilder(8192);
+
+    private bool isLogging = false;
+    private float lastFlushTime = 0f;
+
+    private string currentHitObject = "NA";
+    private string previousHitObject = "NA";
+    private string prePreviousHitObject = "NA";
+
+    private float currentHitDistance = 0f;
+    private float currentHitStartTime = 0f;
+    private float lastSwitchTime = -999f;
+
+    private int switchCount = 0;
+    private int switchBackCount = 0;
+    private int lostHitCount = 0;
+
+    private void Awake()
+    {
+        if (defocus == null)
+        {
+            defocus = GetComponent<Defocus>();
+        }
+    }
+
+    private void Start()
+    {
+        toolbox = EyeTrackingToolbox.Instance;
+
+        if (string.IsNullOrWhiteSpace(algorithmName))
+        {
+            if (GetComponent<ImprovedFocusProvider>() != null)
+            {
+                algorithmName = "Improved";
+            }
+            else if (GetComponent<ToolboxFocusProvider>() != null)
+            {
+                algorithmName = "Baseline";
+            }
+            else
+            {
+                algorithmName = "Unknown";
+            }
+        }
+
+        if (autoStartOnPlay)
+        {
+            StartLogging();
+        }
+    }
+
+    private void Update()
+    {
+        if (!isLogging || toolbox == null)
+        {
+            return;
+        }
+
+        float recorderStepStart = Time.realtimeSinceStartup;
+
+        GazeData gazeData = toolbox.GetGazeData();
+        Ray focusRay = gazeData.combinedRayWorld;
+
+        bool hasValidRay = focusRay.direction.sqrMagnitude > 0.0001f;
+        bool hasHit = false;
+        string hitObject = "NA";
+        float hitDistance = 0f;
+
+        if (hasValidRay && Physics.Raycast(focusRay, out RaycastHit hit, maxFocusRayDistance))
+        {
+            hasHit = true;
+            hitObject = hit.collider.name;
+            hitDistance = hit.distance;
+            UpdateSwitchMetrics(hitObject, hitDistance);
+        }
+        else
+        {
+            lostHitCount++;
+        }
+
+        float targetOpticalPower = defocus != null ? defocus.targetOpticalPower : 0f;
+        float opticalPower = defocus != null ? defocus.opticalPower : 0f;
+
+        float targetFocusDistance = targetOpticalPower > 0.0001f ? 1f / targetOpticalPower : 0f;
+        float currentFocusDistance = opticalPower > 0.0001f ? 1f / opticalPower : 0f;
+
+        float currentObjectDuration = currentHitObject != "NA" ? Time.time - currentHitStartTime : 0f;
+        float frameTimeMs = Time.unscaledDeltaTime * 1000f;
+        float recorderStepMs = (Time.realtimeSinceStartup - recorderStepStart) * 1000f;
+
+        buffer.Append(Time.time.ToString("F6")).Append(",");
+        buffer.Append(SceneManager.GetActiveScene().name).Append(",");
+        buffer.Append(algorithmName).Append(",");
+        buffer.Append(frameTimeMs.ToString("F4")).Append(",");
+        buffer.Append(recorderStepMs.ToString("F4")).Append(",");
+        buffer.Append(hasHit ? "1" : "0").Append(",");
+        buffer.Append(hitObject).Append(",");
+        buffer.Append(hitDistance.ToString("F4")).Append(",");
+        buffer.Append(currentHitObject).Append(",");
+        buffer.Append(currentHitDistance.ToString("F4")).Append(",");
+        buffer.Append(currentObjectDuration.ToString("F4")).Append(",");
+        buffer.Append(switchCount).Append(",");
+        buffer.Append(switchBackCount).Append(",");
+        buffer.Append(lostHitCount).Append(",");
+        buffer.Append(targetOpticalPower.ToString("F6")).Append(",");
+        buffer.Append(opticalPower.ToString("F6")).Append(",");
+        buffer.Append(targetFocusDistance.ToString("F4")).Append(",");
+        buffer.Append(currentFocusDistance.ToString("F4")).AppendLine();
+
+        if (Time.time - lastFlushTime >= flushInterval)
+        {
+            Flush();
+        }
+    }
+
+    private void UpdateSwitchMetrics(string newHitObject, float newHitDistance)
+    {
+        if (currentHitObject == "NA")
+        {
+            currentHitObject = newHitObject;
+            currentHitDistance = newHitDistance;
+            currentHitStartTime = Time.time;
+            return;
+        }
+
+        bool objectChanged = newHitObject != currentHitObject;
+        bool distanceChangedEnough = Mathf.Abs(newHitDistance - currentHitDistance) >= minSwitchDistanceDelta;
+
+        if (objectChanged && distanceChangedEnough)
+        {
+            prePreviousHitObject = previousHitObject;
+            previousHitObject = currentHitObject;
+
+            currentHitObject = newHitObject;
+            currentHitDistance = newHitDistance;
+            currentHitStartTime = Time.time;
+
+            switchCount++;
+
+            if (newHitObject == prePreviousHitObject && Time.time - lastSwitchTime <= switchBackWindow)
+            {
+                switchBackCount++;
+            }
+
+            lastSwitchTime = Time.time;
+            return;
+        }
+
+        currentHitDistance = newHitDistance;
+    }
+
+    public void StartLogging()
+    {
+        if (isLogging)
+        {
+            return;
+        }
+
+        string folder = Path.Combine(Application.persistentDataPath, outputFolderName);
+        Directory.CreateDirectory(folder);
+
+        string safeSceneName = SceneManager.GetActiveScene().name;
+        string timestamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss");
+
+        filePath = Path.Combine(folder, $"{fileBaseName}_{safeSceneName}_{algorithmName}_{timestamp}.csv");
+
+        File.WriteAllText(filePath, BuildHeader());
+        isLogging = true;
+        lastFlushTime = Time.time;
+
+        Debug.Log("FocusMetricsRecorder logging to: " + filePath);
+    }
+
+    public void StopLogging()
+    {
+        if (!isLogging)
+        {
+            return;
+        }
+
+        Flush();
+        isLogging = false;
+
+        Debug.Log("FocusMetricsRecorder stopped.");
+    }
+
+    private void Flush()
+    {
+        if (buffer.Length == 0 || string.IsNullOrEmpty(filePath))
+        {
+            lastFlushTime = Time.time;
+            return;
+        }
+
+        File.AppendAllText(filePath, buffer.ToString());
+        buffer.Length = 0;
+        lastFlushTime = Time.time;
+    }
+
+    private string BuildHeader()
+    {
+        return
+            "unity_time," +
+            "scene_name," +
+            "algorithm_name," +
+            "frame_time_ms," +
+            "recorder_step_ms," +
+            "has_hit," +
+            "raw_hit_object," +
+            "raw_hit_distance_m," +
+            "tracked_hit_object," +
+            "tracked_hit_distance_m," +
+            "tracked_hit_duration_s," +
+            "switch_count," +
+            "switch_back_count," +
+            "lost_hit_count," +
+            "target_optical_power," +
+            "optical_power," +
+            "target_focus_distance_m," +
+            "current_focus_distance_m\n";
+    }
+
+    private void OnDisable()
+    {
+        StopLogging();
+    }
+
+    private void OnApplicationQuit()
+    {
+        StopLogging();
+    }
+}
+
+
+
+
+Assets > Simulations > Autofocals > ToolboxFocusProvider.cs
+
+using UnityEngine;
+
+[DisallowMultipleComponent]
+public class ToolboxFocusProvider : MonoBehaviour
+{
+    public Defocus defocus;
+    public bool useCombinedRay = true;
+    public bool drawDebugRay = true;
+    public float debugRayLength = 10f;
+
+    private EyeTrackingToolbox toolbox;
+
+    private void Awake()
+    {
+        if (defocus == null)
+        {
+            defocus = GetComponent<Defocus>();
+        }
+    }
+
+    private void Start()
+    {
+        toolbox = EyeTrackingToolbox.Instance;
+
+        if (toolbox == null)
+        {
+            Debug.LogError("ToolboxFocusProvider: EyeTrackingToolbox.Instance not found.");
+        }
+
+        if (defocus == null)
+        {
+            Debug.LogError("ToolboxFocusProvider: Defocus reference missing.");
+        }
+    }
+
+    private void Update()
+    {
+        if (toolbox == null || defocus == null)
+        {
+            return;
+        }
+
+        GazeData gazeData = toolbox.GetGazeData();
+        Ray focusRay = gazeData.combinedRayWorld;
+
+        if (focusRay.direction.sqrMagnitude < 0.0001f)
+        {
+            return;
+        }
+
+        defocus.SetExternalFocusRay(focusRay, 0f);
+
+        if (drawDebugRay)
+        {
+            Debug.DrawRay(focusRay.origin, focusRay.direction * debugRayLength, Color.cyan);
+        }
+    }
+}
+
+
+
+Assets > Simulations > Autofocals > SphericalRefractiveError.cs
+
+using UnityEngine;
+
+[DisallowMultipleComponent]
+[RequireComponent(typeof(Camera))]
+public class SphericalRefractiveError : MonoBehaviour
+{
+    public Defocus defocus;
+    public Shader refractiveBlurShader;
+
+    [Header("Enable")]
+    public bool enableRefractiveError = true;
+
+    [Header("Clinical Refraction (Diopters)")]
+    [Tooltip("Negative = myopia, positive = hyperopia")]
+    public float leftSphereDiopters = 0.0f;
+
+    [Tooltip("Negative = myopia, positive = hyperopia")]
+    public float rightSphereDiopters = 0.0f;
+
+    [Header("Accommodation (Linear Model)")]
+    [Tooltip("Maximum accommodation amplitude for the left eye in diopters")]
+    public float leftMaxAccommodationDiopters = 4.0f;
+
+    [Tooltip("Maximum accommodation amplitude for the right eye in diopters")]
+    public float rightMaxAccommodationDiopters = 4.0f;
+
+    [Tooltip("Linear accommodation speed in diopters per second")]
+    public float accommodationSpeedDioptersPerSecond = 8.0f;
+
+    [Header("Subjective Sharpness")]
+    [Tooltip("Residual refractive error inside this range is treated as subjectively sharp")]
+    public float sharpnessToleranceDiopters = 0.25f;
+
+    [Header("Blur Mapping")]
+    [Tooltip("How many screen pixels of residual blur are added per diopter of residual error")]
+    public float pixelsPerDiopter = 2.0f;
+
+    [Tooltip("Clamp for the refractive blur radius in pixels")]
+    public float maxBlurRadiusPixels = 12.0f;
+
+    [Header("Debug")]
+    public bool logOnChange = false;
+
+    public float CurrentResidualLeftDiopters => residualLeftDiopters;
+    public float CurrentResidualRightDiopters => residualRightDiopters;
+
+    private Material blurMaterial;
+
+    private float currentAccommodationLeft = 0.0f;
+    private float currentAccommodationRight = 0.0f;
+
+    private float residualLeftDiopters = 0.0f;
+    private float residualRightDiopters = 0.0f;
+
+    private float lastLoggedResidualLeft = float.NaN;
+    private float lastLoggedResidualRight = float.NaN;
+
+    private void Awake()
+    {
+        EnsureReferences();
+    }
+
+    private void OnEnable()
+    {
+        EnsureReferences();
+        InitializeAccommodationFromCurrentDemand();
+        ForceDisableLegacyDefocusOffset();
+    }
+
+    private void Update()
+    {
+        EnsureReferences();
+
+        leftMaxAccommodationDiopters = Mathf.Max(0.0f, leftMaxAccommodationDiopters);
+        rightMaxAccommodationDiopters = Mathf.Max(0.0f, rightMaxAccommodationDiopters);
+        accommodationSpeedDioptersPerSecond = Mathf.Max(0.0f, accommodationSpeedDioptersPerSecond);
+        sharpnessToleranceDiopters = Mathf.Max(0.0f, sharpnessToleranceDiopters);
+        pixelsPerDiopter = Mathf.Max(0.0f, pixelsPerDiopter);
+        maxBlurRadiusPixels = Mathf.Max(0.0f, maxBlurRadiusPixels);
+
+        UpdateAccommodationModel();
+        ForceDisableLegacyDefocusOffset();
+        MaybeLog();
+    }
+
+    private void OnValidate()
+    {
+        EnsureReferences();
+
+        leftMaxAccommodationDiopters = Mathf.Max(0.0f, leftMaxAccommodationDiopters);
+        rightMaxAccommodationDiopters = Mathf.Max(0.0f, rightMaxAccommodationDiopters);
+        accommodationSpeedDioptersPerSecond = Mathf.Max(0.0f, accommodationSpeedDioptersPerSecond);
+        sharpnessToleranceDiopters = Mathf.Max(0.0f, sharpnessToleranceDiopters);
+        pixelsPerDiopter = Mathf.Max(0.0f, pixelsPerDiopter);
+        maxBlurRadiusPixels = Mathf.Max(0.0f, maxBlurRadiusPixels);
+
+        if (!Application.isPlaying)
+        {
+            float demand = GetCurrentDemand();
+            currentAccommodationLeft = ComputeTargetAccommodation(demand, leftSphereDiopters, leftMaxAccommodationDiopters);
+            currentAccommodationRight = ComputeTargetAccommodation(demand, rightSphereDiopters, rightMaxAccommodationDiopters);
+
+            float effectiveLeft = ComputeEffectivePower(leftSphereDiopters, currentAccommodationLeft);
+            float effectiveRight = ComputeEffectivePower(rightSphereDiopters, currentAccommodationRight);
+
+            residualLeftDiopters = ApplySharpnessTolerance(effectiveLeft - demand, sharpnessToleranceDiopters);
+            residualRightDiopters = ApplySharpnessTolerance(effectiveRight - demand, sharpnessToleranceDiopters);
+        }
+
+        ForceDisableLegacyDefocusOffset();
+    }
+
+    private void OnRenderImage(RenderTexture source, RenderTexture destination)
+    {
+        EnsureReferences();
+
+        if (!enableRefractiveError || refractiveBlurShader == null)
+        {
+            Graphics.Blit(source, destination);
+            return;
+        }
+
+        float pupilScale = 1.0f;
+        if (defocus != null)
+        {
+            pupilScale = Mathf.Max(0.25f, defocus.pupilSize / 5.0f);
+        }
+
+        float leftBlurRadiusPx = Mathf.Min(
+            maxBlurRadiusPixels,
+            Mathf.Abs(residualLeftDiopters) * pixelsPerDiopter * pupilScale
+        );
+
+        float rightBlurRadiusPx = Mathf.Min(
+            maxBlurRadiusPixels,
+            Mathf.Abs(residualRightDiopters) * pixelsPerDiopter * pupilScale
+        );
+
+        if (leftBlurRadiusPx < 0.01f && rightBlurRadiusPx < 0.01f)
+        {
+            Graphics.Blit(source, destination);
+            return;
+        }
+
+        if (blurMaterial == null || blurMaterial.shader != refractiveBlurShader)
+        {
+            blurMaterial = new Material(refractiveBlurShader);
+            blurMaterial.hideFlags = HideFlags.HideAndDontSave;
+        }
+
+        blurMaterial.SetFloat("_LeftBlurRadiusPx", leftBlurRadiusPx);
+        blurMaterial.SetFloat("_RightBlurRadiusPx", rightBlurRadiusPx);
+
+        Graphics.Blit(source, destination, blurMaterial, 0);
+    }
+
+    private void OnDisable()
+    {
+        ForceDisableLegacyDefocusOffset();
+
+        if (blurMaterial != null)
+        {
+            DestroyImmediate(blurMaterial);
+            blurMaterial = null;
+        }
+    }
+
+    private void EnsureReferences()
+    {
+        if (defocus == null)
+        {
+            defocus = GetComponent<Defocus>();
+        }
+
+        if (refractiveBlurShader == null)
+        {
+            refractiveBlurShader = Shader.Find("Hidden/RefractiveErrorPSF");
+        }
+    }
+
+    private void ForceDisableLegacyDefocusOffset()
+    {
+        if (defocus != null)
+        {
+            defocus.opticalPowerOffsetDiopters = 0.0f;
+        }
+    }
+
+    private void InitializeAccommodationFromCurrentDemand()
+    {
+        float demand = GetCurrentDemand();
+        currentAccommodationLeft = ComputeTargetAccommodation(demand, leftSphereDiopters, leftMaxAccommodationDiopters);
+        currentAccommodationRight = ComputeTargetAccommodation(demand, rightSphereDiopters, rightMaxAccommodationDiopters);
+
+        float effectiveLeft = ComputeEffectivePower(leftSphereDiopters, currentAccommodationLeft);
+        float effectiveRight = ComputeEffectivePower(rightSphereDiopters, currentAccommodationRight);
+
+        residualLeftDiopters = ApplySharpnessTolerance(effectiveLeft - demand, sharpnessToleranceDiopters);
+        residualRightDiopters = ApplySharpnessTolerance(effectiveRight - demand, sharpnessToleranceDiopters);
+    }
+
+    private void UpdateAccommodationModel()
+    {
+        float demand = GetCurrentDemand();
+
+        float targetAccommodationLeft = ComputeTargetAccommodation(
+            demand,
+            leftSphereDiopters,
+            leftMaxAccommodationDiopters
+        );
+
+        float targetAccommodationRight = ComputeTargetAccommodation(
+            demand,
+            rightSphereDiopters,
+            rightMaxAccommodationDiopters
+        );
+
+        if (Application.isPlaying)
+        {
+            float maxStep = accommodationSpeedDioptersPerSecond * Time.deltaTime;
+
+            currentAccommodationLeft = Mathf.MoveTowards(
+                currentAccommodationLeft,
+                targetAccommodationLeft,
+                maxStep
+            );
+
+            currentAccommodationRight = Mathf.MoveTowards(
+                currentAccommodationRight,
+                targetAccommodationRight,
+                maxStep
+            );
+        }
+        else
+        {
+            currentAccommodationLeft = targetAccommodationLeft;
+            currentAccommodationRight = targetAccommodationRight;
+        }
+
+        float effectiveLeft = ComputeEffectivePower(leftSphereDiopters, currentAccommodationLeft);
+        float effectiveRight = ComputeEffectivePower(rightSphereDiopters, currentAccommodationRight);
+
+        residualLeftDiopters = ApplySharpnessTolerance(
+            effectiveLeft - demand,
+            sharpnessToleranceDiopters
+        );
+
+        residualRightDiopters = ApplySharpnessTolerance(
+            effectiveRight - demand,
+            sharpnessToleranceDiopters
+        );
+    }
+
+    private float GetCurrentDemand()
+    {
+        if (defocus == null)
+        {
+            return 0.0f;
+        }
+
+        return Mathf.Max(0.0f, defocus.opticalPower);
+    }
+
+    private float ComputeTargetAccommodation(float demand, float sphere, float maxAccommodation)
+    {
+        // Linear model:
+        // requiredAccommodation = demand + sphere
+        return Mathf.Clamp(demand + sphere, 0.0f, maxAccommodation);
+    }
+
+    private float ComputeEffectivePower(float sphere, float actualAccommodation)
+    {
+        // Baseline refractive state + current accommodation
+        return -sphere + actualAccommodation;
+    }
+
+    private float ApplySharpnessTolerance(float residualError, float tolerance)
+    {
+        float magnitude = Mathf.Abs(residualError);
+
+        if (magnitude <= tolerance)
+        {
+            return 0.0f;
+        }
+
+        return Mathf.Sign(residualError) * (magnitude - tolerance);
+    }
+
+    private void MaybeLog()
+    {
+        if (!logOnChange)
+        {
+            return;
+        }
+
+        bool changed =
+            !Mathf.Approximately(residualLeftDiopters, lastLoggedResidualLeft) ||
+            !Mathf.Approximately(residualRightDiopters, lastLoggedResidualRight);
+
+        if (!changed)
+        {
+            return;
+        }
+
+        lastLoggedResidualLeft = residualLeftDiopters;
+        lastLoggedResidualRight = residualRightDiopters;
+
+        Debug.Log(
+            $"SphericalRefractiveError | " +
+            $"L Sphere={leftSphereDiopters:F2}, R Sphere={rightSphereDiopters:F2}, " +
+            $"L Acc={currentAccommodationLeft:F2}, R Acc={currentAccommodationRight:F2}, " +
+            $"L Residual={residualLeftDiopters:F2}, R Residual={residualRightDiopters:F2}"
+        );
+    }
+}
+
+
+
+Assets > Simulations > Autofocals > RefractiveErrorPSF.shader
+
+Shader "Hidden/RefractiveErrorPSF"
+{
+    Properties
+    {
+        _MainTex ("Texture", 2D) = "white" {}
+    }
+
+    CGINCLUDE
+    #include "UnityCG.cginc"
+
+    UNITY_DECLARE_SCREENSPACE_TEXTURE(_MainTex);
+
+    float4 _MainTex_TexelSize;
+    float _LeftBlurRadiusPx;
+    float _RightBlurRadiusPx;
+
+    struct appdata
+    {
+        float4 vertex : POSITION;
+        float2 uv : TEXCOORD0;
+        UNITY_VERTEX_INPUT_INSTANCE_ID
+    };
+
+    struct v2f
+    {
+        float2 uv : TEXCOORD0;
+        float4 vertex : SV_POSITION;
+        UNITY_VERTEX_OUTPUT_STEREO
+    };
+
+    v2f vert(appdata v)
+    {
+        v2f o;
+
+        UNITY_SETUP_INSTANCE_ID(v);
+        UNITY_INITIALIZE_OUTPUT(v2f, o);
+        UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
+        o.vertex = UnityObjectToClipPos(v.vertex);
+        o.uv = v.uv;
+        return o;
+    }
+
+    half4 SampleBlur(float2 uv, float blurRadiusPx)
+    {
+        if (blurRadiusPx < 0.01)
+        {
+            return UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, uv);
+        }
+
+        float2 t = _MainTex_TexelSize.xy * blurRadiusPx;
+
+        half4 sum = 0;
+
+        // Center
+        sum += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, uv) * 0.20;
+
+        // Cardinals
+        sum += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, uv + float2( 1.0,  0.0) * t) * 0.10;
+        sum += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, uv + float2(-1.0,  0.0) * t) * 0.10;
+        sum += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, uv + float2( 0.0,  1.0) * t) * 0.10;
+        sum += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, uv + float2( 0.0, -1.0) * t) * 0.10;
+
+        // Diagonals
+        sum += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, uv + float2( 0.7071,  0.7071) * t) * 0.07;
+        sum += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, uv + float2(-0.7071,  0.7071) * t) * 0.07;
+        sum += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, uv + float2( 0.7071, -0.7071) * t) * 0.07;
+        sum += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, uv + float2(-0.7071, -0.7071) * t) * 0.07;
+
+        // Inner ring
+        sum += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, uv + float2( 0.5,  0.0) * t) * 0.03;
+        sum += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, uv + float2(-0.5,  0.0) * t) * 0.03;
+        sum += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, uv + float2( 0.0,  0.5) * t) * 0.03;
+        sum += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, uv + float2( 0.0, -0.5) * t) * 0.03;
+
+        return sum;
+    }
+    ENDCG
+
+    SubShader
+    {
+        Cull Off ZWrite Off ZTest Always
+
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+
+            half4 frag(v2f i) : SV_Target
+            {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
+
+                float blurRadiusPx = (unity_StereoEyeIndex == 0)
+                    ? _LeftBlurRadiusPx
+                    : _RightBlurRadiusPx;
+
+                return SampleBlur(i.uv, blurRadiusPx);
+            }
+            ENDCG
+        }
+    }
+}

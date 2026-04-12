@@ -12,6 +12,10 @@ public class Defocus : MonoBehaviour
     public float targetOpticalPower = 0.0f;
 
     public float opticalPower = 0.0f;
+
+    [Header("Optional Refractive Error")]
+    public float opticalPowerOffsetDiopters = 0.0f;
+
     public float powerChangePerSec = 8.0f;
     public float pupilSize = 5.0f;
 
@@ -52,39 +56,65 @@ public class Defocus : MonoBehaviour
 
     void Start()
     {
-        cam.depthTextureMode = DepthTextureMode.Depth;
-        Debug.Log(cam.depthTextureMode);
+        if (cam == null)
+        {
+            cam = GetComponent<Camera>();
+        }
+
+        if (cam != null)
+        {
+            cam.depthTextureMode = DepthTextureMode.Depth;
+            Debug.Log(cam.depthTextureMode);
+        }
+
         opticalPower = targetOpticalPower;
     }
 
     void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
-        if (defocusMaterial == null)
+        if (cam == null)
+        {
+            cam = GetComponent<Camera>();
+        }
+
+        if (defocusShader == null)
+        {
+            Graphics.Blit(source, destination);
+            return;
+        }
+
+        if (defocusMaterial == null || defocusMaterial.shader != defocusShader)
         {
             defocusMaterial = new Material(defocusShader);
             defocusMaterial.hideFlags = HideFlags.HideAndDontSave;
         }
 
+        int safeDownscaleFactor = Mathf.Max(1, downscaleFactor);
+
         cocConstant = 0.057f * pupilSize * Mathf.Deg2Rad;
         cocConstant = Mathf.Tan(cocConstant / 2f) / Mathf.Tan(cam.fieldOfView * Mathf.Deg2Rad / 2f) * cam.pixelHeight;
 
+        float effectiveOpticalPower = opticalPower + opticalPowerOffsetDiopters;
+
         RenderTexture coc = RenderTexture.GetTemporary(
-            source.width, source.height, 0,
-            RenderTextureFormat.RHalf, RenderTextureReadWrite.Linear
+            source.width,
+            source.height,
+            0,
+            RenderTextureFormat.RHalf,
+            RenderTextureReadWrite.Linear
         );
 
-        int downscaledWidth = source.width / downscaleFactor;
-        int downscaledHeight = source.height / downscaleFactor;
+        int downscaledWidth = Mathf.Max(1, source.width / safeDownscaleFactor);
+        int downscaledHeight = Mathf.Max(1, source.height / safeDownscaleFactor);
+
         RenderTexture tmpTex1 = RenderTexture.GetTemporary(downscaledWidth, downscaledHeight, 0, source.format);
         RenderTexture tmpTex2 = RenderTexture.GetTemporary(downscaledWidth, downscaledHeight, 0, source.format);
 
-        defocusMaterial.SetTexture("_defocusTexture", coc);
-        defocusMaterial.SetTexture("_blurredTex", tmpTex1);
-
-        defocusMaterial.SetFloat("_OpticalPower", opticalPower);
+        defocusMaterial.SetFloat("_OpticalPower", effectiveOpticalPower);
         defocusMaterial.SetFloat("_CocConstant", cocConstant);
         defocusMaterial.SetFloat("_BokehRadius", bokehRadius);
-        defocusMaterial.SetInt("_downscaleFactor", downscaleFactor);
+        defocusMaterial.SetInt("_downscaleFactor", safeDownscaleFactor);
+        defocusMaterial.SetTexture("_defocusTexture", coc);
 
         if (showDepth)
         {
@@ -102,16 +132,19 @@ public class Defocus : MonoBehaviour
             Graphics.Blit(source, tmpTex1, defocusMaterial, preFilterPass);
             Graphics.Blit(tmpTex1, tmpTex2, defocusMaterial, blurPass);
 
+            RenderTexture finalBlurTex;
             if (usePostPass)
             {
                 Graphics.Blit(tmpTex2, tmpTex1, defocusMaterial, postFilterPass);
+                finalBlurTex = tmpTex1;
             }
             else
             {
-                Graphics.Blit(tmpTex2, tmpTex1);
+                finalBlurTex = tmpTex2;
             }
 
-            Graphics.Blit(tmpTex2, destination);
+            defocusMaterial.SetTexture("_blurredTex", finalBlurTex);
+            Graphics.Blit(source, destination, defocusMaterial, combinePass);
         }
 
         RenderTexture.ReleaseTemporary(coc);
@@ -191,5 +224,14 @@ public class Defocus : MonoBehaviour
         }
 
         targetOpticalPower = 1.0f / focusDistance;
+    }
+
+    void OnDisable()
+    {
+        if (defocusMaterial != null)
+        {
+            DestroyImmediate(defocusMaterial);
+            defocusMaterial = null;
+        }
     }
 }
