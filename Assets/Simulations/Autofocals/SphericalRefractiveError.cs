@@ -4,6 +4,14 @@ using UnityEngine;
 [RequireComponent(typeof(Camera))]
 public class SphericalRefractiveError : MonoBehaviour
 {
+    public enum PresbyopiaStage
+    {
+        None,
+        Early,
+        Moderate,
+        Advanced
+    }
+
     public Defocus defocus;
     public Shader refractiveBlurShader;
 
@@ -17,15 +25,25 @@ public class SphericalRefractiveError : MonoBehaviour
     [Tooltip("Negative = myopia, positive = hyperopia")]
     public float rightSphereDiopters = 0.0f;
 
-    [Header("Accommodation (Linear Model)")]
-    [Tooltip("Maximum accommodation amplitude for the left eye in diopters")]
-    public float leftMaxAccommodationDiopters = 4.0f;
+    [Header("Presbyopia")]
+    public PresbyopiaStage presbyopiaStage = PresbyopiaStage.None;
 
-    [Tooltip("Maximum accommodation amplitude for the right eye in diopters")]
-    public float rightMaxAccommodationDiopters = 4.0f;
+    [Header("Accommodation Capacity (Base, before Presbyopia scaling)")]
+    [Tooltip("Base maximum accommodation amplitude for the left eye in diopters")]
+    public float leftMaxAccommodationDiopters = 6.0f;
 
-    [Tooltip("Linear accommodation speed in diopters per second")]
-    public float accommodationSpeedDioptersPerSecond = 8.0f;
+    [Tooltip("Base maximum accommodation amplitude for the right eye in diopters")]
+    public float rightMaxAccommodationDiopters = 6.0f;
+
+    [Header("Paper-Inspired Accommodation Dynamics (Base)")]
+    [Tooltip("Base time constant for far -> near focusing")]
+    public float accommodationTauSeconds = 0.22f;
+
+    [Tooltip("Base time constant for near -> far relaxation")]
+    public float disaccommodationTauSeconds = 0.14f;
+
+    [Tooltip("Small phasic boost for larger focus steps")]
+    public float pulseGain = 0.60f;
 
     [Header("Subjective Sharpness")]
     [Tooltip("Residual refractive error inside this range is treated as subjectively sharp")]
@@ -55,6 +73,18 @@ public class SphericalRefractiveError : MonoBehaviour
     private float lastLoggedResidualLeft = float.NaN;
     private float lastLoggedResidualRight = float.NaN;
 
+    private const float PresbyopiaLagStartDiopters = 1.0f;
+
+    private struct PresbyopiaProfile
+    {
+        public float maxAccommodationMultiplier;
+        public float responseGain;
+        public float lagBase;
+        public float lagPerDiopter;
+        public float accommodationTauMultiplier;
+        public float disaccommodationTauMultiplier;
+    }
+
     private void Awake()
     {
         EnsureReferences();
@@ -73,7 +103,11 @@ public class SphericalRefractiveError : MonoBehaviour
 
         leftMaxAccommodationDiopters = Mathf.Max(0.0f, leftMaxAccommodationDiopters);
         rightMaxAccommodationDiopters = Mathf.Max(0.0f, rightMaxAccommodationDiopters);
-        accommodationSpeedDioptersPerSecond = Mathf.Max(0.0f, accommodationSpeedDioptersPerSecond);
+
+        accommodationTauSeconds = Mathf.Max(0.001f, accommodationTauSeconds);
+        disaccommodationTauSeconds = Mathf.Max(0.001f, disaccommodationTauSeconds);
+        pulseGain = Mathf.Max(0.0f, pulseGain);
+
         sharpnessToleranceDiopters = Mathf.Max(0.0f, sharpnessToleranceDiopters);
         pixelsPerDiopter = Mathf.Max(0.0f, pixelsPerDiopter);
         maxBlurRadiusPixels = Mathf.Max(0.0f, maxBlurRadiusPixels);
@@ -89,7 +123,11 @@ public class SphericalRefractiveError : MonoBehaviour
 
         leftMaxAccommodationDiopters = Mathf.Max(0.0f, leftMaxAccommodationDiopters);
         rightMaxAccommodationDiopters = Mathf.Max(0.0f, rightMaxAccommodationDiopters);
-        accommodationSpeedDioptersPerSecond = Mathf.Max(0.0f, accommodationSpeedDioptersPerSecond);
+
+        accommodationTauSeconds = Mathf.Max(0.001f, accommodationTauSeconds);
+        disaccommodationTauSeconds = Mathf.Max(0.001f, disaccommodationTauSeconds);
+        pulseGain = Mathf.Max(0.0f, pulseGain);
+
         sharpnessToleranceDiopters = Mathf.Max(0.0f, sharpnessToleranceDiopters);
         pixelsPerDiopter = Mathf.Max(0.0f, pixelsPerDiopter);
         maxBlurRadiusPixels = Mathf.Max(0.0f, maxBlurRadiusPixels);
@@ -97,14 +135,34 @@ public class SphericalRefractiveError : MonoBehaviour
         if (!Application.isPlaying)
         {
             float demand = GetCurrentDemand();
-            currentAccommodationLeft = ComputeTargetAccommodation(demand, leftSphereDiopters, leftMaxAccommodationDiopters);
-            currentAccommodationRight = ComputeTargetAccommodation(demand, rightSphereDiopters, rightMaxAccommodationDiopters);
+            PresbyopiaProfile profile = GetPresbyopiaProfile();
+
+            currentAccommodationLeft = ComputeTargetAccommodation(
+                demand,
+                leftSphereDiopters,
+                leftMaxAccommodationDiopters,
+                profile
+            );
+
+            currentAccommodationRight = ComputeTargetAccommodation(
+                demand,
+                rightSphereDiopters,
+                rightMaxAccommodationDiopters,
+                profile
+            );
 
             float effectiveLeft = ComputeEffectivePower(leftSphereDiopters, currentAccommodationLeft);
             float effectiveRight = ComputeEffectivePower(rightSphereDiopters, currentAccommodationRight);
 
-            residualLeftDiopters = ApplySharpnessTolerance(effectiveLeft - demand, sharpnessToleranceDiopters);
-            residualRightDiopters = ApplySharpnessTolerance(effectiveRight - demand, sharpnessToleranceDiopters);
+            residualLeftDiopters = ApplySharpnessTolerance(
+                effectiveLeft - demand,
+                sharpnessToleranceDiopters
+            );
+
+            residualRightDiopters = ApplySharpnessTolerance(
+                effectiveRight - demand,
+                sharpnessToleranceDiopters
+            );
         }
 
         ForceDisableLegacyDefocusOffset();
@@ -186,49 +244,120 @@ public class SphericalRefractiveError : MonoBehaviour
         }
     }
 
+    private PresbyopiaProfile GetPresbyopiaProfile()
+    {
+        switch (presbyopiaStage)
+        {
+            case PresbyopiaStage.Early:
+                return new PresbyopiaProfile
+                {
+                    maxAccommodationMultiplier = 0.80f,
+                    responseGain = 0.92f,
+                    lagBase = 0.10f,
+                    lagPerDiopter = 0.08f,
+                    accommodationTauMultiplier = 1.15f,
+                    disaccommodationTauMultiplier = 1.05f
+                };
+
+            case PresbyopiaStage.Moderate:
+                return new PresbyopiaProfile
+                {
+                    maxAccommodationMultiplier = 0.55f,
+                    responseGain = 0.82f,
+                    lagBase = 0.22f,
+                    lagPerDiopter = 0.14f,
+                    accommodationTauMultiplier = 1.40f,
+                    disaccommodationTauMultiplier = 1.10f
+                };
+
+            case PresbyopiaStage.Advanced:
+                return new PresbyopiaProfile
+                {
+                    maxAccommodationMultiplier = 0.30f,
+                    responseGain = 0.68f,
+                    lagBase = 0.35f,
+                    lagPerDiopter = 0.20f,
+                    accommodationTauMultiplier = 1.80f,
+                    disaccommodationTauMultiplier = 1.20f
+                };
+
+            default:
+                return new PresbyopiaProfile
+                {
+                    maxAccommodationMultiplier = 1.00f,
+                    responseGain = 1.00f,
+                    lagBase = 0.00f,
+                    lagPerDiopter = 0.00f,
+                    accommodationTauMultiplier = 1.00f,
+                    disaccommodationTauMultiplier = 1.00f
+                };
+        }
+    }
+
     private void InitializeAccommodationFromCurrentDemand()
     {
         float demand = GetCurrentDemand();
-        currentAccommodationLeft = ComputeTargetAccommodation(demand, leftSphereDiopters, leftMaxAccommodationDiopters);
-        currentAccommodationRight = ComputeTargetAccommodation(demand, rightSphereDiopters, rightMaxAccommodationDiopters);
+        PresbyopiaProfile profile = GetPresbyopiaProfile();
+
+        currentAccommodationLeft = ComputeTargetAccommodation(
+            demand,
+            leftSphereDiopters,
+            leftMaxAccommodationDiopters,
+            profile
+        );
+
+        currentAccommodationRight = ComputeTargetAccommodation(
+            demand,
+            rightSphereDiopters,
+            rightMaxAccommodationDiopters,
+            profile
+        );
 
         float effectiveLeft = ComputeEffectivePower(leftSphereDiopters, currentAccommodationLeft);
         float effectiveRight = ComputeEffectivePower(rightSphereDiopters, currentAccommodationRight);
 
-        residualLeftDiopters = ApplySharpnessTolerance(effectiveLeft - demand, sharpnessToleranceDiopters);
-        residualRightDiopters = ApplySharpnessTolerance(effectiveRight - demand, sharpnessToleranceDiopters);
+        residualLeftDiopters = ApplySharpnessTolerance(
+            effectiveLeft - demand,
+            sharpnessToleranceDiopters
+        );
+
+        residualRightDiopters = ApplySharpnessTolerance(
+            effectiveRight - demand,
+            sharpnessToleranceDiopters
+        );
     }
 
     private void UpdateAccommodationModel()
     {
         float demand = GetCurrentDemand();
+        PresbyopiaProfile profile = GetPresbyopiaProfile();
 
         float targetAccommodationLeft = ComputeTargetAccommodation(
             demand,
             leftSphereDiopters,
-            leftMaxAccommodationDiopters
+            leftMaxAccommodationDiopters,
+            profile
         );
 
         float targetAccommodationRight = ComputeTargetAccommodation(
             demand,
             rightSphereDiopters,
-            rightMaxAccommodationDiopters
+            rightMaxAccommodationDiopters,
+            profile
         );
 
         if (Application.isPlaying)
         {
-            float maxStep = accommodationSpeedDioptersPerSecond * Time.deltaTime;
-
-            currentAccommodationLeft = Mathf.MoveTowards(
+            currentAccommodationLeft = UpdateAccommodationState(
                 currentAccommodationLeft,
                 targetAccommodationLeft,
-                maxStep
+                profile
             );
 
-            currentAccommodationRight = Mathf.MoveTowards(
+            currentAccommodationRight = UpdateAccommodationState(
                 currentAccommodationRight,
                 targetAccommodationRight,
-                maxStep
+                profile
             );
         }
         else
@@ -261,11 +390,51 @@ public class SphericalRefractiveError : MonoBehaviour
         return Mathf.Max(0.0f, defocus.opticalPower);
     }
 
-    private float ComputeTargetAccommodation(float demand, float sphere, float maxAccommodation)
+    private float ComputeTargetAccommodation(
+        float demand,
+        float sphere,
+        float baseMaxAccommodation,
+        PresbyopiaProfile profile)
     {
-        // Linear model:
-        // requiredAccommodation = demand + sphere
-        return Mathf.Clamp(demand + sphere, 0.0f, maxAccommodation);
+        float stageMaxAccommodation = Mathf.Max(
+            0.0f,
+            baseMaxAccommodation * profile.maxAccommodationMultiplier
+        );
+
+        float safeMax = Mathf.Max(0.0001f, stageMaxAccommodation);
+        float requiredAccommodation = Mathf.Max(0.0f, demand + sphere);
+
+        // Reduced static response with increasing presbyopia
+        float effectiveRequired = requiredAccommodation * profile.responseGain;
+
+        // Additional near lag for presbyopia
+        float lag = profile.lagBase +
+                    profile.lagPerDiopter *
+                    Mathf.Max(0.0f, requiredAccommodation - PresbyopiaLagStartDiopters);
+
+        // Saturating static response
+        float targetAccommodation =
+            safeMax * (1.0f - Mathf.Exp(-effectiveRequired / safeMax)) - lag;
+
+        return Mathf.Clamp(targetAccommodation, 0.0f, safeMax);
+    }
+
+    private float UpdateAccommodationState(
+        float currentAccommodation,
+        float targetAccommodation,
+        PresbyopiaProfile profile)
+    {
+        float error = targetAccommodation - currentAccommodation;
+
+        float baseTau = error > 0.0f
+            ? accommodationTauSeconds * profile.accommodationTauMultiplier
+            : disaccommodationTauSeconds * profile.disaccommodationTauMultiplier;
+
+        float effectiveTau = baseTau / (1.0f + pulseGain * Mathf.Abs(error));
+        effectiveTau = Mathf.Max(0.001f, effectiveTau);
+
+        float alpha = 1.0f - Mathf.Exp(-Time.deltaTime / effectiveTau);
+        return Mathf.Lerp(currentAccommodation, targetAccommodation, alpha);
     }
 
     private float ComputeEffectivePower(float sphere, float actualAccommodation)
@@ -307,6 +476,7 @@ public class SphericalRefractiveError : MonoBehaviour
 
         Debug.Log(
             $"SphericalRefractiveError | " +
+            $"Stage={presbyopiaStage}, " +
             $"L Sphere={leftSphereDiopters:F2}, R Sphere={rightSphereDiopters:F2}, " +
             $"L Acc={currentAccommodationLeft:F2}, R Acc={currentAccommodationRight:F2}, " +
             $"L Residual={residualLeftDiopters:F2}, R Residual={residualRightDiopters:F2}"
