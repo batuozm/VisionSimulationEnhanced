@@ -848,10 +848,9 @@ GameObject:
   - component: {fileID: 420540154}
   - component: {fileID: 420540153}
   - component: {fileID: 420540152}
-  - component: {fileID: 420540157}
   - component: {fileID: 420540156}
+  - component: {fileID: 420540157}
   - component: {fileID: 420540158}
-  - component: {fileID: 420540159}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -1078,18 +1077,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 420540150}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: aca9954c80e074c149fcb38893b0649c, type: 3}
+  m_Script: {fileID: 11500000, guid: eade5c82802eb4c3b996616506ac3c2a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   defocus: {fileID: 420540152}
-  autoStartOnPlay: 1
-  outputFolderName: FocusMetrics
-  fileBaseName: focus_metrics
-  algorithmName: Improved
-  flushInterval: 1
-  maxFocusRayDistance: 100
-  minSwitchDistanceDelta: 0.05
-  switchBackWindow: 0.35
+  useCombinedRay: 1
+  drawDebugRay: 1
+  debugRayLength: 10
 --- !u!114 &420540157
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1099,22 +1093,18 @@ MonoBehaviour:
   m_GameObject: {fileID: 420540150}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e3953cde05b8f4f6d8b5ccbe83e420c4, type: 3}
+  m_Script: {fileID: 11500000, guid: aca9954c80e074c149fcb38893b0649c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   defocus: {fileID: 420540152}
-  drawDebugRay: 1
-  debugRayLength: 10
+  autoStartOnPlay: 1
+  outputFolderName: FocusMetrics
+  fileBaseName: focus_metrics
+  algorithmName: Baseline
+  flushInterval: 1
   maxFocusRayDistance: 100
-  distanceDeadband: 0.2
-  candidateConfirmationTime: 0.08
-  distanceLerpSpeed: 12
-  switchScoreBias: 1.3
-  switchDistanceGate: 1
-  farJumpConfirmationMultiplier: 1.75
-  coneAngleDegrees: 0.35
-  centerRayWeight: 1
-  ringRayWeight: 0.35
+  minSwitchDistanceDelta: 0.05
+  switchBackWindow: 0.35
 --- !u!114 &420540158
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1132,36 +1122,13 @@ MonoBehaviour:
   enableRefractiveError: 1
   leftSphereDiopters: -2
   rightSphereDiopters: -2
-  presbyopiaStage: 3
-  leftMaxAccommodationDiopters: 6
-  rightMaxAccommodationDiopters: 6
-  accommodationTauSeconds: 0.22
-  disaccommodationTauSeconds: 0.14
-  pulseGain: 0.6
+  leftMaxAccommodationDiopters: 4
+  rightMaxAccommodationDiopters: 4
+  accommodationSpeedDioptersPerSecond: 8
   sharpnessToleranceDiopters: 0.25
   pixelsPerDiopter: 2
   maxBlurRadiusPixels: 12
   logOnChange: 0
---- !u!114 &420540159
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 420540150}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 551bb66254ddc4145be1ca5f4ef49be6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  eyeTrackingToolbox: {fileID: 0}
-  gazeDot: {fileID: 0}
-  maxDistance: 20
-  hitMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  surfaceOffset: 0.01
-  dotSize: 0.025
 --- !u!1 &446841632 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 18f1341a10ff4f5498da069a966b576a, type: 3}

@@ -851,7 +851,6 @@ GameObject:
   - component: {fileID: 420540157}
   - component: {fileID: 420540156}
   - component: {fileID: 420540158}
-  - component: {fileID: 420540159}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -1130,9 +1129,9 @@ MonoBehaviour:
   defocus: {fileID: 420540152}
   refractiveBlurShader: {fileID: 4800000, guid: 5403e20e1489240d4853d0b80095d6d6, type: 3}
   enableRefractiveError: 1
-  leftSphereDiopters: -2
-  rightSphereDiopters: -2
-  presbyopiaStage: 3
+  leftSphereDiopters: 0
+  rightSphereDiopters: 0
+  presbyopiaStage: 0
   leftMaxAccommodationDiopters: 6
   rightMaxAccommodationDiopters: 6
   accommodationTauSeconds: 0.22
@@ -1142,26 +1141,6 @@ MonoBehaviour:
   pixelsPerDiopter: 2
   maxBlurRadiusPixels: 12
   logOnChange: 0
---- !u!114 &420540159
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 420540150}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 551bb66254ddc4145be1ca5f4ef49be6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  eyeTrackingToolbox: {fileID: 0}
-  gazeDot: {fileID: 0}
-  maxDistance: 20
-  hitMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  surfaceOffset: 0.01
-  dotSize: 0.025
 --- !u!1 &446841632 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 18f1341a10ff4f5498da069a966b576a, type: 3}
@@ -1845,6 +1824,53 @@ MeshCollider:
   m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: 8325899905389026155, guid: a9838afb130b1fb44b93b42497158ca9, type: 3}
+--- !u!1 &916336755
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 916336757}
+  - component: {fileID: 916336756}
+  m_Layer: 0
+  m_Name: SRanipal_Eye_Framework
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &916336756
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 916336755}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 47613961cde0a8b4aa4f79219b7e523c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  EnableEye: 1
+  EnableEyeDataCallback: 1
+  EnableEyeVersion: 0
+--- !u!4 &916336757
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 916336755}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -9.943992, y: 0.64939547, z: -8.171585}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &987224607
 GameObject:
   m_ObjectHideFlags: 0
@@ -3004,7 +3030,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0fca9c37a61ab6a43b0ed57649c62194, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  etprovider: 0
+  etprovider: 1
   calibrateKey: 99
   saveRaycastHitpoint: 0
   trackedObjectList: []
@@ -6299,3 +6325,4 @@ SceneRoots:
   - {fileID: 120836894}
   - {fileID: 1804115586}
   - {fileID: 987224609}
+  - {fileID: 916336757}
