@@ -1066,7 +1066,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   surfaceOffset: 0.01
-  dotSize: 0.025
+  dotSize: 0.01
 --- !u!114 &420540157
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1133,7 +1133,7 @@ MonoBehaviour:
   showDistance: 0
   targetOpticalPower: 0
   opticalPower: 0
-  powerChangePerSec: 8
+  powerChangePerSec: 10
   pupilSize: 5
   bokehRadius: 13
   cocConstant: 2
@@ -1164,7 +1164,7 @@ MonoBehaviour:
   centerRayWeight: 1
   ringRayWeight: 0.35
   useWideConeRetention: 1
-  wideConeMode: 2
+  wideConeMode: 1
   vergenceHoldToleranceFraction: 0.2
   minValidVergenceDistance: 0.2
   maxValidVergenceDistance: 20
@@ -3133,7 +3133,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0fca9c37a61ab6a43b0ed57649c62194, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  etprovider: 0
+  etprovider: 1
   calibrateKey: 99
   saveRaycastHitpoint: 0
   trackedObjectList: []
